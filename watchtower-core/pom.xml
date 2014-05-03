@@ -1,0 +1,141 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+		<groupId>com.heliosapm.watchtower</groupId>
+	    <artifactId>watchtower</artifactId>
+      	<version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <groupId>com.heliosapm.watchtower</groupId>
+    <artifactId>watchtower-core</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>Watchtower :: Core</name>
+    <description>A monitoring and performance data gathering scripting service</description>
+    <packaging>jar</packaging>
+    <url>https://github.com/nickman/watchtower</url>
+	
+    <dependencies>
+      
+		<!-- ==========================================================
+		    Test Dependencies
+		    ========================================================== -->
+      
+		<dependency>
+		    <groupId>junit</groupId>
+		    <artifactId>junit</artifactId>
+		    <scope>test</scope>
+		</dependency>
+
+      <!--
+	========================================
+	Netty Artifacts
+	========================================
+	-->
+
+	<dependency>
+	  <groupId>io.netty</groupId>
+	  <artifactId>netty</artifactId>
+	</dependency>		
+
+	      <!--
+		========================================
+		Helios Artifacts
+		========================================
+		-->
+
+		<dependency>
+			<artifactId>jmx-core</artifactId>
+			<groupId>org.helios.jmx-tools</groupId>
+		</dependency>
+
+
+      <!--
+	========================================
+	Groovy Artifacts
+	========================================
+	-->
+      <dependency>
+				<groupId>org.codehaus.groovy</groupId>
+				<artifactId>groovy-all</artifactId>
+      </dependency>
+      <dependency>
+				<groupId>org.codehaus.groovy</groupId>
+				<artifactId>groovy-all</artifactId>
+				<classifier>indy</classifier>
+      </dependency>
+
+	      <!-- ==========================================================
+			Spring Boot
+		  ========================================================== -->
+		<dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot</artifactId>
+		</dependency>
+
+
+	      <!-- ==========================================================
+		JMX Support
+		  ========================================================== -->
+		<dependency>
+		  <groupId>org.jvnet.opendmk</groupId>
+		  <artifactId>jmxremote_optional</artifactId>
+		</dependency>
+
+	      <!-- ==========================================================
+		Byte Code Injection
+		  ========================================================== -->		
+		<dependency>
+		  <groupId>org.javassist</groupId>
+		  <artifactId>javassist</artifactId>
+		</dependency>
+
+
+		<!-- ==========================================================
+		    Collection Utilities & Dependencies
+		    ========================================================== -->
+		<dependency>
+		  <groupId>net.sf.trove4j</groupId>
+		  <artifactId>trove4j</artifactId>
+		</dependency>            
+		<dependency>
+		  <groupId>com.github.stephenc.high-scale-lib</groupId>
+		  <artifactId>high-scale-lib</artifactId>
+		</dependency>
+
+		<!-- ==========================================================
+		    Google Guava
+		    ========================================================== -->			
+	    <dependency>
+	      <groupId>com.google.guava</groupId>
+	      <artifactId>guava</artifactId>
+	    </dependency>
+		
+
+		<!-- ==========================================================
+		    Asynch & IPC Libs
+		    ========================================================== -->	
+	      <dependency>
+					<groupId>com.lmax</groupId>
+					<artifactId>disruptor</artifactId>
+	      </dependency>            
+
+		<!-- ==========================================================
+		    Logging Libs
+		    ========================================================== -->
+
+	  <dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-api</artifactId>
+	  </dependency>
+
+	  <dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-core</artifactId>
+	  </dependency>
+
+    
+    </dependencies>
+    
+    
+</project>
