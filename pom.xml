@@ -29,7 +29,10 @@
 		<guava.version>15.0</guava.version>		
 		<javassist.version>3.18.0-GA</javassist.version>		
 		<log4j.version>2.0-rc1</log4j.version>
-		<spring.version>1.0.2.RELEASE</spring.version>
+		<spring-boot.version>1.0.2.RELEASE</spring-boot.version>
+		<spring.version>4.0.3.RELEASE</spring.version>		
+		<slf4j.version>1.7.2</slf4j.version>
+		<logback.version>1.0.9</logback.version>
 		<!-- Plugin Versions -->
 		<jar-plugin.version>2.3</jar-plugin.version>
 		<source-plugin.version>2.2</source-plugin.version>
@@ -96,6 +99,8 @@
 	  <version>${netty.version}</version>
 	</dependency>		
 
+
+
       <!--
 	========================================
 	Groovy Artifacts
@@ -119,18 +124,24 @@
 		<dependency>
 		  <groupId>org.springframework.boot</groupId>
 		  <artifactId>spring-boot</artifactId>
-		  <version>${spring.version}</version>
+		  <version>${spring-boot.version}</version>
 		</dependency>
 
 		<dependency>
 		  <groupId>org.springframework.boot</groupId>
 		  <artifactId>spring-boot-starter-remote-shell</artifactId>
-		  <version>${spring.version}</version>
+		  <version>${spring-boot.version}</version>
 		</dependency>
 
 		<dependency>
 		  <groupId>org.springframework.boot</groupId>
 		  <artifactId>spring-boot-starter-web</artifactId>
+		  <version>${spring-boot.version}</version>
+		</dependency>
+
+		<dependency>
+		  <groupId>org.springframework</groupId>
+		  <artifactId>spring-websocket</artifactId>
 		  <version>${spring.version}</version>
 		</dependency>
 
@@ -203,6 +214,12 @@
 	    <artifactId>log4j-core</artifactId>
 	    <version>${log4j.version}</version>
 	  </dependency>
+
+	 <dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-to-slf4j</artifactId>
+	    <version>${log4j.version}</version>
+	  </dependency>	  
 
     
     </dependencies>
@@ -299,7 +316,7 @@
 	<plugin>
 	  <groupId>org.springframework.boot</groupId>
 	  <artifactId>spring-boot-maven-plugin</artifactId>
-	  <version>${spring.version}</version>
+	  <version>${spring-boot.version}</version>
 	</plugin>
 	    
         </plugins>

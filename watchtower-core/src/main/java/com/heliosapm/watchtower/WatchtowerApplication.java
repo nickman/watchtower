@@ -25,6 +25,10 @@
 package com.heliosapm.watchtower;
 
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.io.ResourceLoader;
 
 /**
@@ -36,7 +40,7 @@ import org.springframework.core.io.ResourceLoader;
  */
 
 public class WatchtowerApplication extends SpringApplication {
-
+	protected ApplicationContext parent = null;
 	/**
 	 * Creates a new WatchtowerApplication
 	 * @param sources
@@ -65,5 +69,32 @@ public class WatchtowerApplication extends SpringApplication {
 	protected void printBanner() {
 		Banner.write(System.out);
 	}	
+	
+	/**
+	 * Strategy method used to create the {@link ApplicationContext}. By default this
+	 * method will respect any explicitly set application context or application context
+	 * class before falling back to a suitable default.
+	 * @return the application context (not yet refreshed)
+	 * @see #setApplicationContextClass(Class)
+	 */
+	protected ConfigurableApplicationContext createApplicationContext() {
+		ConfigurableApplicationContext appCtx = super.createApplicationContext();
+		if(parent!=null) {
+			appCtx.setEnvironment((ConfigurableEnvironment) parent.getEnvironment());
+			appCtx.setId("WatchTowerCore");			
+			ParentContextApplicationContextInitializer pinit = new ParentContextApplicationContextInitializer(parent);
+			this.addInitializers(pinit);
+		}
+		return appCtx;
+	}
+
+	/**
+	 * Sets the 
+	 * @param parent the parent to set
+	 */
+	public void setParent(ApplicationContext parent) {
+		this.parent = parent;
+	}	
+	
 
 }

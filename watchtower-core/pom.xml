@@ -47,6 +47,9 @@
 		<dependency>
 			<artifactId>jmx-core</artifactId>
 			<groupId>org.helios.jmx-tools</groupId>
+			<exclusions>
+				
+			</exclusions>
 		</dependency>
 
 
@@ -73,12 +76,23 @@
 		  <artifactId>spring-boot</artifactId>
 		</dependency>
 
+<dependency>
+  <groupId>org.apache.tomcat.embed</groupId>
+  <artifactId>tomcat-embed-core</artifactId>
+  <version>7.0.47</version>
+</dependency>
 		
 
 		<dependency>
 		  <groupId>org.springframework.boot</groupId>
 		  <artifactId>spring-boot-starter-remote-shell</artifactId>
 		</dependency>
+		
+		<dependency>
+		  <groupId>org.springframework</groupId>
+		  <artifactId>spring-websocket</artifactId>
+		</dependency>
+		
 
 		<dependency>
 		  <groupId>org.springframework.boot</groupId>
@@ -146,6 +160,11 @@
 	    <groupId>org.apache.logging.log4j</groupId>
 	    <artifactId>log4j-core</artifactId>
 	  </dependency>
+
+	 <dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-to-slf4j</artifactId>
+	  </dependency>	  
 
     
     </dependencies>
