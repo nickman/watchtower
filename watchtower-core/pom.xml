@@ -73,6 +73,19 @@
 		  <artifactId>spring-boot</artifactId>
 		</dependency>
 
+		
+
+		<dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot-starter-remote-shell</artifactId>
+		</dependency>
+
+		<dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+
 
 	      <!-- ==========================================================
 		JMX Support
@@ -137,5 +150,24 @@
     
     </dependencies>
     
+    <build>
+    	<plugins>
+			<plugin>
+			  <groupId>org.springframework.boot</groupId>
+			  <artifactId>spring-boot-maven-plugin</artifactId>
+			  <configuration>
+			  	<mainClass>com.heliosapm.watchtower.Watchtower</mainClass>
+			  </configuration>
+ 			  <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+              </executions>			  			  
+			</plugin>
+			
+    	</plugins>
+    </build>
     
 </project>

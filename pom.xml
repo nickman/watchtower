@@ -27,8 +27,7 @@
 		<high-scale-lib.version>1.1.4</high-scale-lib.version>
 		<jmx-optional.version>1.0_01-ea</jmx-optional.version>
 		<guava.version>15.0</guava.version>		
-		<javassist.version>3.18.0-GA</javassist.version>
-		<groovy.version>2.2.0</groovy.version>
+		<javassist.version>3.18.0-GA</javassist.version>		
 		<log4j.version>2.0-rc1</log4j.version>
 		<spring.version>1.0.2.RELEASE</spring.version>
 		<!-- Plugin Versions -->
@@ -122,6 +121,20 @@
 		  <artifactId>spring-boot</artifactId>
 		  <version>${spring.version}</version>
 		</dependency>
+
+		<dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot-starter-remote-shell</artifactId>
+		  <version>${spring.version}</version>
+		</dependency>
+
+		<dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot-starter-web</artifactId>
+		  <version>${spring.version}</version>
+		</dependency>
+
+
 
 	      <!-- ==========================================================
 		JMX Support
@@ -281,6 +294,12 @@
 	  <groupId>org.apache.maven.plugins</groupId>
 	  <artifactId>maven-shade-plugin</artifactId>
 	  <version>${shade.version}</version>
+	</plugin>
+
+	<plugin>
+	  <groupId>org.springframework.boot</groupId>
+	  <artifactId>spring-boot-maven-plugin</artifactId>
+	  <version>${spring.version}</version>
 	</plugin>
 	    
         </plugins>
