@@ -36,13 +36,12 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.heliosapm.watchtower.core.CollectionExecutor;
@@ -57,6 +56,7 @@ import com.heliosapm.watchtower.core.CollectionScheduler;
  */
 @RestController
 @EnableAutoConfiguration
+@ComponentScan(basePackages="com.heliosapm.watchtower.deployer")
 public class Watchtower extends TextWebSocketHandler implements ApplicationContextAware,  ApplicationListener<ContextRefreshedEvent> {
 	/** The watchtower root application context */
 	protected ConfigurableApplicationContext appCtx;
