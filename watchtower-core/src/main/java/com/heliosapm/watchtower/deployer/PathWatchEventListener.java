@@ -22,28 +22,36 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package com.heliosapm.watchtower.core;
+package com.heliosapm.watchtower.deployer;
 
-import org.helios.jmx.concurrency.JMXManagedThreadPool;
-import org.helios.jmx.util.helpers.JMXHelper;
-import org.springframework.beans.factory.annotation.Qualifier;
+import java.nio.file.Path;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
 
 /**
- * <p>Title: CollectionExecutor</p>
- * <p>Description: The thread pool for collection asynch tasks</p> 
+ * <p>Title: PathWatchEventListener</p>
+ * <p>Description: Defines a path based watch event listener</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.watchtower.core.CollectionExecutor</code></p>
+ * <p><code>com.heliosapm.watchtower.deployer.PathWatchEventListener</code></p>
  */
-@Qualifier("SpringEvent")
-public class CollectionExecutor extends JMXManagedThreadPool implements CollectionExecutorMBean {
 
+public interface PathWatchEventListener {
 	/**
-	 * Creates a new CollectionExecutor
+	 * Fired when a path event occurs that this listener is subscribed to
+	 * @param event the fired path event
 	 */
-	public CollectionExecutor() {
-		super(JMXHelper.objectName(CollectionExecutor.class), CollectionExecutor.class.getSimpleName());
-	}
-
-
+	public void onPathEvent(WatchEvent<Path> event);
+	
+	/**
+	 * Called when the watched key is cancelled
+	 * @param canceledWatchKey the cancelled watch key
+	 */
+	public void onCancel(WatchKey canceledWatchKey);
+	
+	/**
+	 * Called on an overflow on processing events for the watch key this listener is listening on
+	 * @param overflow the overflow event
+	 */
+	public void onOverflow(WatchEvent<Path> overflow);
 }

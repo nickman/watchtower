@@ -66,7 +66,7 @@ public abstract class ServerComponent {
 	 * @throws Exception thrown if start fails
 	 */
 	public void start() throws Exception {
-		initCounters();
+		initCounters();		
 	}
 	
 	/**

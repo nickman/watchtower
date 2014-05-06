@@ -24,7 +24,9 @@
  */
 package com.heliosapm.watchtower.deployer;
 import java.nio.file.Path;
+import java.nio.file.WatchEvent;
 import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchKey;
 import java.util.Date;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
@@ -44,6 +46,10 @@ public class FileEvent implements Delayed {
 	protected final String fileName;
 	/** The file change type */
 	protected final Kind<Path> eventType;
+	/** The event */
+	protected final WatchEvent<Path> event;
+	/** The listener that registered the watch key */
+	protected final PathWatchEventListener listener;
 	/** The original event noticed time */
 	protected final long eventTimestamp;
 	/** The updateable timestamp  */
@@ -52,16 +58,33 @@ public class FileEvent implements Delayed {
 	
 	/**
 	 * Creates a new FileEvent
-	 * @param fileName The filename for which a change was noticed
-	 * @param eventType The file change type
+	 * @param event The file watcher event
+	 * @param listener The listener that registered the watch key
 	 */
-	public FileEvent(String fileName, Kind<Path> eventType) {
-		this.fileName = fileName;
-		this.eventType = eventType;
+	public FileEvent(WatchEvent<Path> event, PathWatchEventListener listener ) {
+		this.fileName = event.context().getFileName().toString();
+		this.eventType = event.kind();
 		eventTimestamp = SystemClock.time();
 		timestamp = eventTimestamp; 
+		this.event = event;
+		this.listener = listener;
 	}
 	
+	/**
+	 * Creates a new FileEvent
+	 * @param absolutePath The event's file name
+	 * @param eventType The event type
+	 * @param listener The optional listener that registered the watch key
+	 */
+	public FileEvent(String absolutePath, Kind<Path> eventType, PathWatchEventListener listener) {
+		this.fileName = absolutePath;
+		this.eventType = eventType;
+		eventTimestamp = SystemClock.time();
+		timestamp = eventTimestamp;
+		event = null;
+		this.listener = listener;
+	}
+
 	/**
 	 * Adds a delay to the updateable timestamp
 	 * @param ms the delay to add
@@ -91,6 +114,23 @@ public class FileEvent implements Delayed {
 		
 	}
 
+	/**
+	 * Returns the underlying event
+	 * @return the event
+	 */
+	public WatchEvent<Path> getEvent() {
+		return event;
+	}
+	
+	/**
+	 * Returns the listener that registered the watch key 
+	 * @return the listener
+	 */
+	public PathWatchEventListener getListener() {
+		return listener;
+	}
+	
+	
 
 	/**
 	 * Returns the sorting timestamp

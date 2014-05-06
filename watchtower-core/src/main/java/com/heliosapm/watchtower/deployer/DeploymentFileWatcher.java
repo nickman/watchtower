@@ -370,7 +370,7 @@ public class DeploymentFileWatcher extends ServerComponentBean {
 							    if(fileName.toFile().isDirectory()) {
 							    	addHotDir(fileName.toFile().getAbsolutePath());
 							    } else {
-							    	enqueueFileEvent(500, new FileEvent(fileName.toFile().getAbsolutePath(), ev.kind()));
+							    	enqueueFileEvent(500, new FileEvent(ev, null));
 							    }
 							}
 						}
@@ -401,7 +401,7 @@ public class DeploymentFileWatcher extends ServerComponentBean {
 			File hotDirPath = new File(hotDirPathName);
 			for(File f: hotDirPath.listFiles()) {
 				if(f.isDirectory() || !f.canRead()) continue;
-				enqueueFileEvent(500, new FileEvent(f.getAbsolutePath(),  ENTRY_MODIFY));
+				enqueueFileEvent(500, new FileEvent(f.getAbsolutePath(),  ENTRY_MODIFY, null));
 			}
 		}
 	}

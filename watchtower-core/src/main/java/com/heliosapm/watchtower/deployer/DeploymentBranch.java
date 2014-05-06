@@ -29,13 +29,18 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
+import java.nio.file.WatchEvent.Kind;
 import java.nio.file.WatchKey;
 import java.nio.file.StandardWatchEventKinds;
+import java.util.List;
 import java.util.TreeMap;
 
 import javax.management.ObjectName;
 
 import org.helios.jmx.util.helpers.JMXHelper;
+import org.springframework.context.ApplicationListener;
+
+import static java.nio.file.StandardWatchEventKinds.*;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
 
@@ -47,7 +52,7 @@ import com.heliosapm.watchtower.component.ServerComponentBean;
  * <p><code>com.heliosapm.watchtower.deployer.DeploymentBranch</code></p>
  */
 
-public class DeploymentBranch extends ServerComponentBean implements DeploymentBranchMBean {
+public class DeploymentBranch extends ServerComponentBean implements DeploymentBranchMBean, PathWatchEventListener {
 	/** The deployment directory represented by this deployment branch */
 	protected final File deploymentDir;
 	/** The directory name key */
@@ -63,8 +68,9 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	public static final String OBJECT_NAME_BASE = "com.heliosapm.watchtower.deployment:type=branch";
 	
 	/** The file watcher events we'll subscribe to */
+	@SuppressWarnings("unchecked")
 	private static final WatchEvent.Kind<Path>[] WATCH_EVENT_TYPES = new WatchEvent.Kind[] {
-		StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY
+		ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY
 	}; 
 	
 	/**
@@ -77,12 +83,7 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 		if(dirPair.length==1) throw new IllegalArgumentException("The passed deployment directory [" + deploymentDir + "] is invalid: [" + dirPair[0] + "]");
 		this.deploymentDir = deploymentDir;
 		Path path = Paths.get(this.deploymentDir.getPath());
-		try {
-			watchKey = path.register(DeploymentWatchService.getWatchService(path), WATCH_EVENT_TYPES);
-		} catch (IOException e) {			
-			throw new RuntimeException(e);
-		}
-		
+		watchKey =  DeploymentWatchService.getWatchService().getWatchKey(path, this, WATCH_EVENT_TYPES);
 		dirKey = dirPair[0];
 		if("branch".equals(dirKey)) {
 			throw new IllegalArgumentException("The passed deployment directory [" + deploymentDir + "] has an illegal key: [" + dirPair[0] + "]");
@@ -99,6 +100,26 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 		} else {
 			parentBranch = null;
 		}
+	}
+	
+
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onPathEvent(java.nio.file.WatchEvent)
+	 */
+	@Override
+	public void onPathEvent(WatchEvent<Path> event) {
+		if(event==null) return;
+		if (event == OVERFLOW) {			
+			return;
+		} else if (event == ENTRY_CREATE || event == ENTRY_MODIFY || event == ENTRY_DELETE ) {
+	        Path filename = event.context();
+	        log.info("============== {} -- {} [{}] ==============", event.kind().type(), filename, event.count());
+		} else {
+			warn("Unrecognized WatchEvent type [{}]", event.kind().type().getName());
+		}
+		
 	}
 	
 	
@@ -193,6 +214,54 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	public DeploymentBranchMBean getParentBranch() {
 		return parentBranch;
 	}
+
+
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onCancel(java.nio.file.WatchKey)
+	 */
+	@Override
+	public void onCancel(WatchKey canceledWatchKey) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onOverflow(java.nio.file.WatchEvent)
+	 */
+	@Override
+	public void onOverflow(WatchEvent<Path> overflow) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
+//	/**
+//	 * {@inheritDoc}
+//	 * @see org.springframework.context.event.ApplicationEventMulticaster#addApplicationListener(org.springframework.context.ApplicationListener)
+//	 */
+//	@Override
+//	public void addApplicationListener(ApplicationListener<?> listener) {
+//		// TODO Auto-generated method stub
+//		
+//	}
+//
+//
+//	/**
+//	 * {@inheritDoc}
+//	 * @see org.springframework.context.event.ApplicationEventMulticaster#removeApplicationListener(org.springframework.context.ApplicationListener)
+//	 */
+//	@Override
+//	public void removeApplicationListener(ApplicationListener<?> listener) {
+//		// TODO Auto-generated method stub
+//		
+//	}
+
+
 	
 
 }

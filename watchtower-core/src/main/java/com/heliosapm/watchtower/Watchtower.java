@@ -31,13 +31,14 @@ import org.apache.logging.log4j.Logger;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.springframework.beans.BeansException;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.websocket.WebSocketAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.socket.TextMessage;
@@ -46,6 +47,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.heliosapm.watchtower.core.CollectionExecutor;
 import com.heliosapm.watchtower.core.CollectionScheduler;
+import com.heliosapm.watchtower.deployer.DeploymentWatchService;
 
 /**
  * <p>Title: Watchtower</p>
@@ -99,7 +101,7 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	 * @param args The command line arguments
 	 */
 	public static void main(String[] args) {
-		WatchtowerApplication wapp = new WatchtowerApplication(Watchtower.class, WebSocketAutoConfiguration.class);
+		WatchtowerApplication wapp = new WatchtowerApplication(Watchtower.class);
 		wapp.setWebEnvironment(true);
 		wapp.run(args);
 		LOG.info(StringHelper.banner("Watchtower Started"));
@@ -115,6 +117,18 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 		appCtx.addApplicationListener(this);
 	}
 
+	
+	public static final String BEANS_HEADER = "<beans xmlns=\"http://www.springframework.org/schema/beans\"" +
+		  " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" + 
+			" xmlns:aop=\"http://www.springframework.org/schema/aop\"" + 
+			" xmlns:context=\"http://www.springframework.org/schema/context\"" + 
+			" xsi:schemaLocation=\"http://www.springframework.org/schema/beans" + 
+			" http://www.springframework.org/schema/beans/spring-beans.xsd" + 
+			" http://www.springframework.org/schema/aop" + 
+			" http://www.springframework.org/schema/aop/spring-aop.xsd" + 
+			" http://www.springframework.org/schema/context" + 
+			" http://www.springframework.org/schema/context/spring-context.xsd\"><context:annotation-config/>";
+	
 	/**
 	 * {@inheritDoc}
 	 * @see org.springframework.context.ApplicationListener#onApplicationEvent(org.springframework.context.ApplicationEvent)
@@ -122,11 +136,25 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	@Override
 	public void onApplicationEvent(ContextRefreshedEvent event) {
 		if(event.getApplicationContext()!=appCtx) return;
-		WatchtowerApplication children = new WatchtowerApplication(CollectionScheduler.class, CollectionExecutor.class, WebSocketConfig.class);
+		ByteArrayResource fileWatcherXml = new ByteArrayResource((BEANS_HEADER + "<bean id=\"DeploymentWatchService\" class=\"com.heliosapm.watchtower.deployer.DeploymentWatchService\" factory-method=\"getWatchService\"/></beans>").getBytes()) {
+			/**
+			 * {@inheritDoc}
+			 * @see org.springframework.core.io.AbstractResource#getFilename()
+			 */
+			@Override
+			public String getFilename() {				
+				return "DeploymentWatchService.xml";
+			}
+		};
+		
+		WatchtowerApplication children = new WatchtowerApplication(CollectionScheduler.class, CollectionExecutor.class, fileWatcherXml);
+		
 		children.setShowBanner(false);
 		children.setWebEnvironment(false);
 		children.setParent(appCtx);
+		
 		coreCtx = children.run();
+		
 		LOG.info(StringHelper.banner("Watchtower Core Services Started"));
 	}
 

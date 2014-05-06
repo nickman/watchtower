@@ -24,6 +24,8 @@
  */
 package com.heliosapm.watchtower.component;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,21 +42,21 @@ import org.apache.logging.log4j.Level;
 
 public enum APMLogLevel {
 	/** No filtering */
-	ALL(-Integer.MAX_VALUE, Level.ALL),
+	ALL(2147483647, Level.ALL),
 	/** Highest verbosity filtering */
-	TRACE(5000, Level.TRACE),
+	TRACE(600, Level.TRACE),
 	/** High verbosity filtering */
-	DEBUG(10000, Level.DEBUG),
+	DEBUG(500, Level.DEBUG),
 	/** Standard verbosity filtering */
-	INFO(20000, Level.INFO),
+	INFO(400, Level.INFO),
 	/** Filters out all but warnings and more severe */
-	WARN(30000, Level.WARN),
+	WARN(300, Level.WARN),
 	/** Filters out all but errors and more severe */
-	ERROR(40000, Level.ERROR),
+	ERROR(200, Level.ERROR),
 	/** Filters out all but fatal */
-	FATAL(50000, Level.FATAL),
+	FATAL(100, Level.FATAL),
 	/** Turns off logging */
-	OFF(Integer.MAX_VALUE, Level.OFF);
+	OFF(0, Level.OFF);
 	
 	/** Map of Log Levels keyed by the ordinal */
 	private static final Map<Integer, APMLogLevel> ORD2ENUM;
@@ -106,6 +108,22 @@ public enum APMLogLevel {
 		if(ll==null) throw new IllegalArgumentException("The passed pCode [" + pCode + "] is not a valid APMLogLevel pCode", new Throwable());
 		return ll;
 	}		
+	
+	
+	public static void main(String[] args) {
+		try {
+			for(Field f: Level.class.getDeclaredFields()) {
+				if(f.getType().equals(Level.class)) {
+					if(Modifier.isStatic(f.getModifiers()) && Modifier.isPublic(f.getModifiers())) {
+						Level level = (Level)f.get(null);
+						System.out.println(String.format("Name: %s, Int: %s", level.name(), level.intLevel()));
+					}
+				}
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace(System.err);
+		}
+	}
 	
 	/**
 	 * Decodes the passed name to a APMLogLevel.
