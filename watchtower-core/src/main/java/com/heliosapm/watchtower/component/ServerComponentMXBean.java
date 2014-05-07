@@ -71,6 +71,13 @@ public interface ServerComponentMXBean {
 	public String getLevel();
 	
 	/**
+	 * Returns the effective level of this instance's logger
+	 * @return the effective level of this instance's logger
+	 */
+	public String getEffectiveLevel();
+	
+	
+	/**
 	 * Sets the logging level for this instance
 	 * @param levelName the name of the logging level for this instance
 	 */

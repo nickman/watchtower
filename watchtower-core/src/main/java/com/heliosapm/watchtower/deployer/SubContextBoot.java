@@ -26,22 +26,13 @@ package com.heliosapm.watchtower.deployer;
 
 import java.io.File;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.helios.jmx.util.helpers.StringHelper;
-import org.springframework.beans.factory.annotation.AnnotatedGenericBeanDefinition;
-import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.config.ConstructorArgumentValues;
 import org.springframework.beans.factory.support.GenericBeanDefinition;
-import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.support.GenericApplicationContext;
-import org.springframework.context.support.GenericXmlApplicationContext;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.jmx.export.annotation.AnnotationMBeanExporter;
 
 import com.heliosapm.watchtower.Watchtower;
@@ -56,7 +47,7 @@ import com.heliosapm.watchtower.Watchtower;
 
 public class SubContextBoot {
 	/** Static class logger */
-	protected static final Logger LOG = LogManager.getLogger(Watchtower.class);
+	protected static final Logger LOG = LoggerFactory.getLogger(Watchtower.class);
 
 	/**
 	 * Creates a new SubContextBoot

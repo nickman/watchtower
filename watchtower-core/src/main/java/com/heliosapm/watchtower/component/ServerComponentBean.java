@@ -82,6 +82,7 @@ public abstract class ServerComponentBean extends ServerComponent implements
 		SelfNaming,
 		InitializingBean,
 		NotificationPublisherAware,
+		ServerComponentBeanMXBean,
 		DisposableBean {
 
 

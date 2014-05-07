@@ -33,14 +33,17 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.Logger;
 import org.cliffc.high_scale_lib.Counter;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import org.slf4j.LoggerFactory;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
 import org.springframework.jmx.export.annotation.ManagedMetric;
 import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 
 /**
  * <p>Title: ServerComponent</p>
@@ -50,11 +53,12 @@ import org.springframework.jmx.export.annotation.ManagedResource;
  * <p><code>org.helios.apmrouter.server.ServerComponent</code></p>
  */
 @ManagedResource
-public abstract class ServerComponent {
+public abstract class ServerComponent implements ServerComponentMXBean  {
+	/** The logger context */
+	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
-	protected Logger log = (Logger)LogManager.getLogger(getClass());
-	/** The logger level */
-	protected APMLogLevel level = APMLogLevel.pCode(log.getLevel().intLevel());
+	protected Logger log = logCtx.getLogger(getClass());
+	
 	
 	/** Metrics accumulator */
 	protected final NonBlockingHashMap<String, Counter> metrics = new NonBlockingHashMap<String, Counter>();
@@ -73,19 +77,29 @@ public abstract class ServerComponent {
 	 * Stops this component
 	 */
 	public void stop() {
-		
+		/* No Op */
 	}
 	
 	
 	
 	/**
-	 * Returns the level of this instance's logger
-	 * @return the level of this instance's logger
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.ServerComponentMXBean#getLevel()
 	 */
 	@ManagedAttribute(description="The logging level of this component")
 	public String getLevel() {
-		return level.name();
+		return log.getLevel().toString();
 	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.ServerComponentMXBean#getEffectiveLevel()
+	 */
+	@ManagedAttribute(description="The effective logging level of this component")
+	public String getEffectiveLevel() {
+		return log.getEffectiveLevel().toString();
+	}
+	
 	
 	/**
 	 * Sets the logging level for this instance
@@ -93,10 +107,10 @@ public abstract class ServerComponent {
 	 */
 	@ManagedAttribute(description="The logging level of this component")
 	public void setLevel(String levelName) {
-		level = APMLogLevel.valueOfName(levelName);
-		log.setLevel(level.getLevel());
+		log.setLevel(Level.toLevel(levelName, Level.INFO));
 		info("Set Logger to level [", log.getLevel().toString(), "]");
 	}
+	
 	
 	/**
 	 * Issues a trace level logging request
@@ -143,7 +157,7 @@ public abstract class ServerComponent {
 	 * @param msgs The objects to format into a log message
 	 */
 	protected void fatal(Object...msgs) {
-		logAtLevel(APMLogLevel.FATAL, msgs);
+		logAtLevel(APMLogLevel.ERROR, msgs);
 	}
 	
 	
@@ -157,8 +171,8 @@ public abstract class ServerComponent {
 	 * @param msgs The logged messages
 	 */
 	protected void logAtLevel(APMLogLevel l, Object...msgs) {
-		if(level.isEnabledFor(l)) {
-			log.log(l.getLevel(), format(msgs));
+		if(log.isEnabledFor(l.getLevel())) {
+			log.log(null, null, l.pCode(), format(msgs), new String[]{}, null);
 		}				
 	}
 	
@@ -337,8 +351,19 @@ public abstract class ServerComponent {
 	 * @return the requested logger
 	 */
 	public static Logger getLogger(String name) {
-		return (Logger) LogManager.getLogger(name);
+		return ((LoggerContext)LoggerFactory.getILoggerFactory()).getLogger(name);
 	}
+	
+	/**
+	 * Shortcut to get a logger
+	 * @param clazz The class to get a logger for
+	 * @return the requested logger
+	 */
+	public static Logger getLogger(Class<?> clazz) {
+		return ((LoggerContext)LoggerFactory.getILoggerFactory()).getLogger(clazz);
+	}	
+	
+	
 	
 	/**
 	 * Resets all the metrics

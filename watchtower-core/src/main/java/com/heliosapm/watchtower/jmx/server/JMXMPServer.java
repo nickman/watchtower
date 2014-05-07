@@ -32,10 +32,10 @@ import javax.management.remote.JMXConnectorServerFactory;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.jmxmp.JMXMPConnectorServer;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -44,6 +44,8 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextRefreshedEvent;
+
+import com.heliosapm.watchtower.Watchtower;
 
 /**
  * <p>Title: JMXMPServer</p>
@@ -65,7 +67,7 @@ public class JMXMPServer implements ApplicationContextAware, ApplicationListener
 	protected ObjectName objectName = JMXHelper.objectName(JMXMPConnectorServer.class);
 	protected ApplicationContext applicationContext = null;
 	protected final AtomicBoolean started = new AtomicBoolean(false);
-	protected final Logger log = LogManager.getLogger(getClass());
+	protected final Logger log = LoggerFactory.getLogger(JMXMPServer.class);
 	/**
 	 * Creates a new JMXMPServer
 	 */

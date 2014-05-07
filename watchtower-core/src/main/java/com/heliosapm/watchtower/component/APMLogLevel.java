@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.logging.log4j.Level;
+import ch.qos.logback.classic.Level;
 
 /**
  * <p>Title: APMLogLevel</p>
@@ -42,21 +42,23 @@ import org.apache.logging.log4j.Level;
 
 public enum APMLogLevel {
 	/** No filtering */
-	ALL(2147483647, Level.ALL),
+	ALL(-2147483648, Level.ALL),
 	/** Highest verbosity filtering */
-	TRACE(600, Level.TRACE),
+	TRACE(00, Level.TRACE),
 	/** High verbosity filtering */
-	DEBUG(500, Level.DEBUG),
+	DEBUG(10, Level.DEBUG),
 	/** Standard verbosity filtering */
-	INFO(400, Level.INFO),
+	INFO(20, Level.INFO),
 	/** Filters out all but warnings and more severe */
-	WARN(300, Level.WARN),
+	WARN(30, Level.WARN),
 	/** Filters out all but errors and more severe */
-	ERROR(200, Level.ERROR),
-	/** Filters out all but fatal */
-	FATAL(100, Level.FATAL),
+	ERROR(40, Level.ERROR),
+//	/** Filters out all but fatal */
+//	FATAL(100, Level.FATAL),
 	/** Turns off logging */
-	OFF(0, Level.OFF);
+	OFF(2147483647, Level.OFF);
+	
+
 	
 	/** Map of Log Levels keyed by the ordinal */
 	private static final Map<Integer, APMLogLevel> ORD2ENUM;
@@ -112,11 +114,11 @@ public enum APMLogLevel {
 	
 	public static void main(String[] args) {
 		try {
-			for(Field f: Level.class.getDeclaredFields()) {
+			for(Field f: ch.qos.logback.classic.Level.class.getDeclaredFields()) {
 				if(f.getType().equals(Level.class)) {
 					if(Modifier.isStatic(f.getModifiers()) && Modifier.isPublic(f.getModifiers())) {
 						Level level = (Level)f.get(null);
-						System.out.println(String.format("Name: %s, Int: %s", level.name(), level.intLevel()));
+						System.out.println(String.format("Name: %s, Int: %s", level.toString(), level.toInt()));
 					}
 				}
 			}

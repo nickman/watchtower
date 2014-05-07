@@ -44,18 +44,16 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.ConfigurationHelper;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.context.ApplicationListener;
+
+import ch.qos.logback.classic.Logger;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
-import com.heliosapm.watchtower.core.CollectionExecutor;
 import com.heliosapm.watchtower.core.EventExecutorMBean;
 
 /**
@@ -77,7 +75,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	private final Set<Path> deploymentRoots = new CopyOnWriteArraySet<Path>();
 	
 	/** Static class logger */
-	private static final Logger log = LogManager.getLogger(DeploymentWatchService.class);
+	private static final Logger log = getLogger(DeploymentWatchService.class);
 	
 	/** A map of registered watch services keyed by the Path root */
 	private final NonBlockingHashMap<Path, WatchService> watchServices = new NonBlockingHashMap<Path, WatchService>();
