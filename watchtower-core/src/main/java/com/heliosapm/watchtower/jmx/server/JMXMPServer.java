@@ -24,6 +24,8 @@
  */
 package com.heliosapm.watchtower.jmx.server;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import javax.management.ObjectName;
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerFactory;
@@ -34,8 +36,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextRefreshedEvent;
@@ -49,7 +54,7 @@ import org.springframework.context.event.ContextRefreshedEvent;
  */
 @Configuration
 @EnableAutoConfiguration
-public class JMXMPServer implements ApplicationListener<ContextRefreshedEvent> {
+public class JMXMPServer implements ApplicationContextAware, ApplicationListener<ContextRefreshedEvent> {
 	@Value("${jmxmp.iface:0.0.0.0}")
 	protected String bindInterface;
 	@Value("${jmxmp.port:8006}")
@@ -58,6 +63,8 @@ public class JMXMPServer implements ApplicationListener<ContextRefreshedEvent> {
 	protected JMXConnectorServer server = null;
 	protected JMXServiceURL serviceURL = null;
 	protected ObjectName objectName = JMXHelper.objectName(JMXMPConnectorServer.class);
+	protected ApplicationContext applicationContext = null;
+	protected final AtomicBoolean started = new AtomicBoolean(false);
 	protected final Logger log = LogManager.getLogger(getClass());
 	/**
 	 * Creates a new JMXMPServer
@@ -67,20 +74,33 @@ public class JMXMPServer implements ApplicationListener<ContextRefreshedEvent> {
 	}
 
 	public void start() {
-		try {
-			log.info(StringHelper.banner("Starting JMXMPServer...."));
-			serviceURL = new JMXServiceURL(String.format("service:jmx:jmxmp://%s:%s", bindInterface, port));
-			server = JMXConnectorServerFactory.newJMXConnectorServer(serviceURL, null, JMXHelper.getHeliosMBeanServer());
-			//JMXHelper.registerMBean(server, objectName);
-			server.start();
-			log.info(StringHelper.banner("Started JMXMPServer on [{}:{}]"), bindInterface, port);
-		} catch (Exception ex) {
-			log.error("Failed to start JMXMPServer on [{}:{}]", bindInterface, port, ex);
+		if(started.compareAndSet(false, true)) {
+			try {				
+				log.info(StringHelper.banner("Starting JMXMPServer...."));
+				serviceURL = new JMXServiceURL(String.format("service:jmx:jmxmp://%s:%s", bindInterface, port));
+				server = JMXConnectorServerFactory.newJMXConnectorServer(serviceURL, null, JMXHelper.getHeliosMBeanServer());
+				//JMXHelper.registerMBean(server, objectName);
+				server.start();
+				log.info(StringHelper.banner("Started JMXMPServer on [{}:{}]"), bindInterface, port);
+			} catch (Exception ex) {
+				log.error("Failed to start JMXMPServer on [{}:{}]", bindInterface, port, ex);
+			}
 		}
 	}
 
 	@Override
 	public void onApplicationEvent(ContextRefreshedEvent event) {
+		if(applicationContext != event.getApplicationContext()) return;
 		start();		
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see org.springframework.context.ApplicationContextAware#setApplicationContext(org.springframework.context.ApplicationContext)
+	 */
+	@Override
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		this.applicationContext = applicationContext;
+		
 	}
 }

@@ -28,7 +28,8 @@ import javax.management.ObjectName;
 
 import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
-import org.springframework.beans.factory.annotation.Qualifier;
+
+import com.heliosapm.watchtower.core.annotation.Propagate;
 
 /**
  * <p>Title: CollectionExecutor</p>
@@ -38,13 +39,15 @@ import org.springframework.beans.factory.annotation.Qualifier;
  * <p><code>com.heliosapm.watchtower.core.CollectionExecutor</code></p>
  * FIXME: expose config with spring annotations
  */
+@Propagate
 public class CollectionExecutor extends JMXManagedThreadPool implements CollectionExecutorMBean {
-
+	
+	
 	/**
 	 * Creates a new CollectionExecutor
 	 */
 	public CollectionExecutor() {
-		super(JMXHelper.objectName(CollectionExecutor.class), CollectionExecutor.class.getSimpleName(), false);
+		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, CollectionExecutor.class.getSimpleName())), CollectionExecutor.class.getSimpleName(), false);
 	}
 
 	/**

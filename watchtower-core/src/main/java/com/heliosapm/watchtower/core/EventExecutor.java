@@ -27,6 +27,8 @@ package com.heliosapm.watchtower.core;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.springframework.beans.factory.annotation.Qualifier;
 
+import com.heliosapm.watchtower.core.annotation.Propagate;
+
 /**
  * <p>Title: EventExecutor</p>
  * <p>Description: The spring event executor</p> 
@@ -35,13 +37,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
  * <p><code>com.heliosapm.watchtower.core.EventExecutor</code></p>
  */
 @Qualifier("SpringEvent")
+@Propagate
 public class EventExecutor extends CollectionExecutor implements EventExecutorMBean {
 
 	/**
 	 * Creates a new EventExecutor
 	 */
 	public EventExecutor() {
-		super(JMXHelper.objectName(EventExecutor.class), EventExecutor.class.getSimpleName(), false);
+		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, EventExecutor.class.getSimpleName())), EventExecutor.class.getSimpleName(), false);
 	}
 
 }

@@ -35,5 +35,7 @@ import org.helios.jmx.concurrency.JMXManagedSchedulerMBean;
  */
 
 public interface CollectionSchedulerMBean extends JMXManagedSchedulerMBean {
+	/** ObjectName template */
+	public static final String OBJECT_NAME_TEMPLATE = "com.heliosapm.watchtower.core.threadpools:service=Scheduler,name=%s";
 
 }

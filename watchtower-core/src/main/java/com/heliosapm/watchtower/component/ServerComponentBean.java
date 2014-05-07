@@ -218,12 +218,12 @@ public abstract class ServerComponentBean extends ServerComponent implements
 	protected final ApplicationListener lifecycleListener = new ApplicationListener<ApplicationContextEvent>() {
 		@Override
 		public void onApplicationEvent(final ApplicationContextEvent event) {
-			if(applicationContext != event.getApplicationContext()) return;
+			if(applicationContext == event.getApplicationContext()) return;
 			if(event instanceof ContextStartedEvent) {
 				eventExecutor.execute(new Runnable(){
 					public void run() { onApplicationContextStart((ContextStartedEvent)event); }
 				});
-			} else if(event instanceof ContextRefreshedEvent) {
+			} else if(event instanceof ContextRefreshedEvent) {				
 				eventExecutor.execute(new Runnable(){
 					public void run() { onApplicationContextRefresh((ContextRefreshedEvent)event); }
 				});
@@ -329,7 +329,7 @@ public abstract class ServerComponentBean extends ServerComponent implements
 	 * Sets the spring event executor 
 	 * @param eventExecutor the eventExecutor to set
 	 */
-	@Autowired(required=false)
+	@Autowired(required=true)
 	@Qualifier("SpringEvent")
 	public void setEventExecutor(Executor eventExecutor) {
 		this.eventExecutor = eventExecutor;

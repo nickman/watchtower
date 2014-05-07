@@ -22,32 +22,26 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package com.heliosapm.watchtower.core;
+package com.heliosapm.watchtower.core.annotation;
 
-import org.helios.jmx.concurrency.JMXManagedScheduler;
-import org.helios.jmx.util.helpers.JMXHelper;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-
-import com.heliosapm.watchtower.core.annotation.Propagate;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * <p>Title: CollectionScheduler</p>
- * <p>Description: </p> 
+ * <p>Title: Propagate</p>
+ * <p>Description: Annotation marking instances of the annotated class are to be propagated into child contexts</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.watchtower.core.CollectionScheduler</code></p>
- * FIXME: expose config with spring annotations
+ * <p><code>com.heliosapm.watchtower.core.annotation.Propagate</code></p>
  */
-@EnableAutoConfiguration
-@Propagate
-public class CollectionScheduler extends JMXManagedScheduler implements CollectionSchedulerMBean {
-
-	
-	/**
-	 * Creates a new CollectionScheduler
-	 */
-	public CollectionScheduler() {		
-		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, CollectionScheduler.class.getSimpleName())), CollectionScheduler.class.getSimpleName(), false);
-	}
-
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Inherited
+@Documented
+public @interface Propagate {
+	/* No Attrs */
 }

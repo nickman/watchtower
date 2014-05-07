@@ -47,12 +47,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.ConfigurationHelper;
+import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.ApplicationListener;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
+import com.heliosapm.watchtower.core.CollectionExecutor;
+import com.heliosapm.watchtower.core.EventExecutorMBean;
 
 /**
  * <p>Title: DeploymentWatchService</p>
@@ -87,6 +91,9 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	/** The delay queue processor */
 	private Thread delayQueueProcessor = null;
 	
+	/** Thread pool which executes all the actual deployments */
+	private final JMXManagedThreadPool deploymentThreadPool;
+	
 	/** Flag indicating if the pollers should keep running */
 	protected final AtomicBoolean keepRunning  = new AtomicBoolean(true);
 	/** The thread group that the watch service pollers run in */
@@ -117,7 +124,8 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 		}
 		delayQueueProcessor = new Thread(threadGroup, this, "DelayQueueProcessor");
 		delayQueueProcessor.setDaemon(true);		
-		log.info("Added {} root deployment directories", deploymentRoots.size());		
+		log.info("Added {} root deployment directories", deploymentRoots.size());	
+		deploymentThreadPool = new JMXManagedThreadPool(JMXHelper.objectName(String.format(EventExecutorMBean.OBJECT_NAME_TEMPLATE, "DeploymentService")), "DeploymentService", true);
 	}
 	
 	/**
@@ -171,23 +179,26 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 		log.info(StringHelper.banner("Starting DeploymentWatchService DelayQueue Processor"));
 		while(true) {
 			try {
-				FileEvent fe = processingQueue.take();
-				PathWatchEventListener listener = fe.getListener();
-				File file = new File(fe.getFileName()); 
-						//fe.getEvent().context().getFileName().toFile().getAbsoluteFile();
-				if(listener!=null) {
-					if(fe.getEvent().kind()==ENTRY_CREATE) {
-						if(file.isDirectory()) listener.onDirectoryCreated(file);
-						else listener.onFileCreated(file);
-					} else if(fe.getEvent().kind()==ENTRY_DELETE) {
-						if(file.isDirectory()) listener.onDirectoryDeleted(file);
-						else listener.onFileDeleted(file);						
-					} else if(fe.getEvent().kind()==ENTRY_MODIFY) {
-						if(file.isDirectory()) listener.onDirectoryModified(file);
-						else listener.onFileModified(file);												
-					}
-				}
-			} catch (InterruptedException iex) {
+				final FileEvent fe = processingQueue.take();
+					deploymentThreadPool.submit(new Runnable(){
+						public void run() {
+							PathWatchEventListener listener = fe.getListener();
+							if(listener!=null) {
+								File file = new File(fe.getFileName()); 							
+								if(fe.getEvent().kind()==ENTRY_CREATE) {
+									if(file.isDirectory()) listener.onDirectoryCreated(file);
+									else listener.onFileCreated(file);
+								} else if(fe.getEvent().kind()==ENTRY_DELETE) {
+									if(file.isDirectory()) listener.onDirectoryDeleted(file);
+									else listener.onFileDeleted(file);						
+								} else if(fe.getEvent().kind()==ENTRY_MODIFY) {
+									if(file.isDirectory()) listener.onDirectoryModified(file);
+									else listener.onFileModified(file);												
+								}
+							}
+						}
+					});				
+			} catch (Exception ex) {
 				if(keepRunning.get()) {
 					if(Thread.interrupted()) Thread.interrupted();
 				} else {

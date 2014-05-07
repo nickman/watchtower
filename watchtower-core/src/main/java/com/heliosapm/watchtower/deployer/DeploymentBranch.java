@@ -24,28 +24,29 @@
  */
 package com.heliosapm.watchtower.deployer;
 
+import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
-import java.nio.file.WatchEvent.Kind;
 import java.nio.file.WatchKey;
-import java.nio.file.StandardWatchEventKinds;
-import java.util.List;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
+import javax.management.Notification;
 import javax.management.ObjectName;
 
 import org.helios.jmx.util.helpers.JMXHelper;
+import org.helios.jmx.util.helpers.SystemClock;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.event.ApplicationContextEvent;
-
-import static java.nio.file.StandardWatchEventKinds.*;
+import org.springframework.jmx.export.annotation.ManagedNotification;
+import org.springframework.jmx.export.annotation.ManagedNotifications;
+import org.springframework.jmx.export.annotation.ManagedResource;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
-import com.heliosapm.watchtower.core.EventExecutor;
 
 /**
  * <p>Title: DeploymentBranch</p>
@@ -55,6 +56,10 @@ import com.heliosapm.watchtower.core.EventExecutor;
  * <p><code>com.heliosapm.watchtower.deployer.DeploymentBranch</code></p>
  */
 @EnableAutoConfiguration
+@ManagedNotifications({
+	@ManagedNotification(notificationTypes={"com.heliosapm.watchtower.deployer.DeploymentBranch.start"}, name="javax.management.Notification", description="Notifies when a new DeploymentBranch has started")
+})
+@ManagedResource
 public class DeploymentBranch extends ServerComponentBean implements DeploymentBranchMBean, PathWatchEventListener {
 	/** The deployment directory represented by this deployment branch */
 	protected final File deploymentDir;
@@ -110,14 +115,14 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 		}
 	}
 	
-	public void onApplicationEvent(final ApplicationContextEvent event) {
-		if(event.getApplicationContext()==this.applicationContext) return;
-		if(eventExecutor==null) {
-			EventExecutor ee =  this.applicationContext.getBean("eventExecutor", EventExecutor.class);
-			eventExecutor = ee;
-		}
-		super.onApplicationEvent(event);
-
+	/** JMX notification serial */
+	protected final AtomicLong notificationSerial = new AtomicLong(0L);
+	
+	/**
+	 * Sends a SubContext started notification
+	 */
+	protected void fireSubContextStarted() {
+		notificationPublisher.sendNotification(new Notification("", objectName, notificationSerial.incrementAndGet(), SystemClock.time(), "Started SubContext [" + deploymentDir + "]"));
 	}
 	
 	/**

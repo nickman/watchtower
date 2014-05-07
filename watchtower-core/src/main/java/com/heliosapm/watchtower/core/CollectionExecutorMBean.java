@@ -35,5 +35,7 @@ import org.helios.jmx.concurrency.JMXManagedThreadPoolMBean;
  */
 
 public interface CollectionExecutorMBean extends JMXManagedThreadPoolMBean {
+	/** ObjectName template */
+	public static final String OBJECT_NAME_TEMPLATE = "com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=%s";
 
 }
