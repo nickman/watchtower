@@ -2,7 +2,7 @@
  * Helios, OpenSource Monitoring
  * Brought to you by the Helios Development Group
  *
- * Copyright 2014, Helios Development Group and individual contributors
+ * Copyright 2007, Helios Development Group and individual contributors
  * as indicated by the @author tags. See the copyright.txt file in the
  * distribution for a full listing of individual contributors.
  *
@@ -24,26 +24,14 @@
  */
 package com.heliosapm.watchtower.core;
 
-import org.helios.jmx.concurrency.JMXManagedScheduler;
-import org.helios.jmx.util.helpers.JMXHelper;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-
 /**
- * <p>Title: CollectionScheduler</p>
- * <p>Description: </p> 
+ * <p>Title: EventExecutorMBean</p>
+ * <p>Description: JMX MBean interface for {@link EventExecutor}</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.watchtower.core.CollectionScheduler</code></p>
- * FIXME: expose config with spring annotations
+ * <p><code>com.heliosapm.watchtower.core.EventExecutorMBean</code></p>
  */
-@EnableAutoConfiguration
-public class CollectionScheduler extends JMXManagedScheduler {
 
-	/**
-	 * Creates a new CollectionScheduler
-	 */
-	public CollectionScheduler() {
-		super(JMXHelper.objectName(CollectionScheduler.class), CollectionScheduler.class.getSimpleName(), false);
-	}
+public interface EventExecutorMBean extends CollectionExecutorMBean {
 
 }

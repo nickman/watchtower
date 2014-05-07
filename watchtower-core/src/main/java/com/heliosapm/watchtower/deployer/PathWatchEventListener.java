@@ -24,6 +24,7 @@
  */
 package com.heliosapm.watchtower.deployer;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
@@ -38,10 +39,41 @@ import java.nio.file.WatchKey;
 
 public interface PathWatchEventListener {
 	/**
-	 * Fired when a path event occurs that this listener is subscribed to
-	 * @param event the fired path event
+	 * Fired when a created directory path event occurs that this listener is subscribed to
+	 * @param createdDir The created directory
 	 */
-	public void onPathEvent(WatchEvent<Path> event);
+	public void onDirectoryCreated(File createdDir);
+	
+	/**
+	 * Fired when a deleted directory path event occurs that this listener is subscribed to
+	 * @param deletedDir The deleted directory
+	 */
+	public void onDirectoryDeleted(File deletedDir);
+	
+	/**
+	 * Fired when a modified directory path event occurs that this listener is subscribed to
+	 * @param modifiedDir The modified directory
+	 */
+	public void onDirectoryModified(File modifiedDir);
+	
+	/**
+	 * Fired when a created file path event occurs that this listener is subscribed to
+	 * @param createdFile The created file
+	 */
+	public void onFileCreated(File createdFile);
+	
+	/**
+	 * Fired when a deleted file path event occurs that this listener is subscribed to
+	 * @param deletedFile The deleted file
+	 */
+	public void onFileDeleted(File deletedFile);
+	
+	/**
+	 * Fired when a modified file path event occurs that this listener is subscribed to
+	 * @param modifiedFile The modified file
+	 */
+	public void onFileModified(File modifiedFile);
+	
 	
 	/**
 	 * Called when the watched key is cancelled

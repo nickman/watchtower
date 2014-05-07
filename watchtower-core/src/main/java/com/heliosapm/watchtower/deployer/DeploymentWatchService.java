@@ -50,7 +50,7 @@ import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.helios.jmx.util.helpers.ConfigurationHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-
+import org.springframework.context.ApplicationListener;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
 
@@ -173,8 +173,19 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 			try {
 				FileEvent fe = processingQueue.take();
 				PathWatchEventListener listener = fe.getListener();
+				File file = new File(fe.getFileName()); 
+						//fe.getEvent().context().getFileName().toFile().getAbsoluteFile();
 				if(listener!=null) {
-					listener.onPathEvent(fe.getEvent());
+					if(fe.getEvent().kind()==ENTRY_CREATE) {
+						if(file.isDirectory()) listener.onDirectoryCreated(file);
+						else listener.onFileCreated(file);
+					} else if(fe.getEvent().kind()==ENTRY_DELETE) {
+						if(file.isDirectory()) listener.onDirectoryDeleted(file);
+						else listener.onFileDeleted(file);						
+					} else if(fe.getEvent().kind()==ENTRY_MODIFY) {
+						if(file.isDirectory()) listener.onDirectoryModified(file);
+						else listener.onFileModified(file);												
+					}
 				}
 			} catch (InterruptedException iex) {
 				if(keepRunning.get()) {
@@ -456,16 +467,18 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 			public void run() {
 				log.info(StringHelper.banner("Starting WatchService Poller for Deployment Root [{}]"), path);
 				WatchKey watchKey = null;
+				WrappedWatchKey wwk = null;
 				for(;;) {
 					try {
 						watchKey = watchService.take();
-						WrappedWatchKey wwk = watchKeys.get(watchKey);
+						wwk = watchKeys.get(watchKey);
 						List<WatchEvent<?>> polledEvents = watchKey.pollEvents();
 						if(wwk!=null && wwk.listener!=null) {							
 							for(WatchEvent<?> event: polledEvents) {
 								@SuppressWarnings("unchecked")
 								WatchEvent<Path> pathEvent = (WatchEvent<Path>)event;  
-								FileEvent fileEvent = new FileEvent(pathEvent, wwk.listener);
+								Path parent = (Path)watchKey.watchable();
+								FileEvent fileEvent = new FileEvent(new File(parent.toFile(), pathEvent.context().getFileName().toFile().getName()).getAbsolutePath(), pathEvent, wwk.listener);
 								if(event.kind()==OVERFLOW) {
 									wwk.listener.onOverflow(pathEvent);
 								} else {
@@ -479,6 +492,12 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 						} else {							
 							break;
 						}
+					} finally {
+						if(wwk!=null) {
+							wwk.reset();
+						}
+						wwk = null;
+						watchKey = null;
 					}
 				}
 				fileSystemEventPollers.remove(path);
@@ -508,14 +527,6 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 		return thread;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onPathEvent(java.nio.file.WatchEvent)
-	 */
-	@Override
-	public void onPathEvent(WatchEvent<Path> event) {		
-		log.info("---------> [{}] {}", event.kind(), event.context().getFileName());		
-	}
 
 	/**
 	 * {@inheritDoc}
@@ -535,5 +546,69 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	public void onOverflow(WatchEvent<Path> overflow) {
 		log.warn("---------> [{}] {}", overflow.kind(), overflow.context().getFileName());		
 	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryCreated(java.io.File)
+	 */
+	@Override
+	public void onDirectoryCreated(File dir) {
+		log.info("----> Directory Created [{}]", dir);
+		SubContextBoot.main(dir, this.applicationContext);
+		
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryDeleted(java.io.File)
+	 */
+	@Override
+	public void onDirectoryDeleted(File dir) {
+		log.info("----> Directory Deleted [{}]", dir);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryModified(java.io.File)
+	 */
+	@Override
+	public void onDirectoryModified(File dir) {
+		log.info("----> Directory Modified [{}]", dir);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileCreated(java.io.File)
+	 */
+	@Override
+	public void onFileCreated(File file) {
+		log.info("----> File Created [{}]", file);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileDeleted(java.io.File)
+	 */
+	@Override
+	public void onFileDeleted(File file) {
+		log.info("----> File Deleted [{}]", file);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileModified(java.io.File)
+	 */
+	@Override
+	public void onFileModified(File file) {
+		log.info("----> File Modified [{}]", file);
+	}
+
+
+//	@Override
+//	public void onCreatePathEvent(WatchEvent<Path> event) {
+//		log.info("---------> [CREATED] {}", event.kind(), event.context().getFileName());
+//		
+//	}
+
 
 }

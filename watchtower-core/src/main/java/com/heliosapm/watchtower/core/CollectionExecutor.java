@@ -24,6 +24,8 @@
  */
 package com.heliosapm.watchtower.core;
 
+import javax.management.ObjectName;
+
 import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -34,15 +36,25 @@ import org.springframework.beans.factory.annotation.Qualifier;
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.core.CollectionExecutor</code></p>
+ * FIXME: expose config with spring annotations
  */
-@Qualifier("SpringEvent")
 public class CollectionExecutor extends JMXManagedThreadPool implements CollectionExecutorMBean {
 
 	/**
 	 * Creates a new CollectionExecutor
 	 */
 	public CollectionExecutor() {
-		super(JMXHelper.objectName(CollectionExecutor.class), CollectionExecutor.class.getSimpleName());
+		super(JMXHelper.objectName(CollectionExecutor.class), CollectionExecutor.class.getSimpleName(), false);
+	}
+
+	/**
+	 * Creates a new CollectionExecutor
+	 * @param objectName The JMX ObjectName of the executor
+	 * @param poolName The executor pool name
+	 * @param publishJMX If true, publishes the JMX interface
+	 */
+	public CollectionExecutor(ObjectName objectName, String poolName, boolean publishJMX) {
+		super(objectName, poolName, publishJMX);
 	}
 
 

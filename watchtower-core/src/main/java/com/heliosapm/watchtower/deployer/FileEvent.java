@@ -58,11 +58,12 @@ public class FileEvent implements Delayed {
 	
 	/**
 	 * Creates a new FileEvent
+	 * @param fileName The absolute file name
 	 * @param event The file watcher event
 	 * @param listener The listener that registered the watch key
 	 */
-	public FileEvent(WatchEvent<Path> event, PathWatchEventListener listener ) {
-		this.fileName = event.context().getFileName().toString();
+	public FileEvent(String fileName, WatchEvent<Path> event, PathWatchEventListener listener ) {
+		this.fileName = fileName;
 		this.eventType = event.kind();
 		eventTimestamp = SystemClock.time();
 		timestamp = eventTimestamp; 

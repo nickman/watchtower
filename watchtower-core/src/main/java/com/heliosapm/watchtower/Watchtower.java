@@ -35,10 +35,9 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
+import org.springframework.jmx.export.annotation.AnnotationMBeanExporter;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.socket.TextMessage;
@@ -47,7 +46,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.heliosapm.watchtower.core.CollectionExecutor;
 import com.heliosapm.watchtower.core.CollectionScheduler;
-import com.heliosapm.watchtower.deployer.DeploymentWatchService;
+import com.heliosapm.watchtower.core.EventExecutor;
+import com.heliosapm.watchtower.jmx.server.JMXMPServer;
 
 /**
  * <p>Title: Watchtower</p>
@@ -58,7 +58,6 @@ import com.heliosapm.watchtower.deployer.DeploymentWatchService;
  */
 @RestController
 @EnableAutoConfiguration
-@ComponentScan(basePackages="com.heliosapm.watchtower.deployer")
 public class Watchtower extends TextWebSocketHandler implements ApplicationContextAware,  ApplicationListener<ContextRefreshedEvent> {
 	/** The watchtower root application context */
 	protected ConfigurableApplicationContext appCtx;
@@ -127,7 +126,7 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 			" http://www.springframework.org/schema/aop" + 
 			" http://www.springframework.org/schema/aop/spring-aop.xsd" + 
 			" http://www.springframework.org/schema/context" + 
-			" http://www.springframework.org/schema/context/spring-context.xsd\"><context:annotation-config/>";
+			" http://www.springframework.org/schema/context/spring-context.xsd\">"; // <context:annotation-config/>
 	
 	/**
 	 * {@inheritDoc}
@@ -147,15 +146,19 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 			}
 		};
 		
-		WatchtowerApplication children = new WatchtowerApplication(CollectionScheduler.class, CollectionExecutor.class, fileWatcherXml);
+		WatchtowerApplication children = new WatchtowerApplication(AnnotationMBeanExporter.class, JMXMPServer.class, CollectionScheduler.class, CollectionExecutor.class, EventExecutor.class, fileWatcherXml);
 		
 		children.setShowBanner(false);
 		children.setWebEnvironment(false);
 		children.setParent(appCtx);
 		
 		coreCtx = children.run();
-		
-		LOG.info(StringHelper.banner("Watchtower Core Services Started"));
+		StringBuilder b = new StringBuilder();
+		for(String s: coreCtx.getBeanDefinitionNames()) {
+			b.append("\n\t\t").append(s);
+		}
+		LOG.info(StringHelper.banner("Watchtower Core Services Started\n\tBeans: {}"), b.toString());
+		// LOG.info(StringHelper.banner("Started SubContext: [{}]\n\tBean Names:{}"), appCtx.getId(), Arrays.toString(appCtx.getBeanDefinitionNames()));
 	}
 
 }

@@ -38,11 +38,14 @@ import java.util.TreeMap;
 import javax.management.ObjectName;
 
 import org.helios.jmx.util.helpers.JMXHelper;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ApplicationContextEvent;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
+import com.heliosapm.watchtower.core.EventExecutor;
 
 /**
  * <p>Title: DeploymentBranch</p>
@@ -51,7 +54,7 @@ import com.heliosapm.watchtower.component.ServerComponentBean;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.deployer.DeploymentBranch</code></p>
  */
-
+@EnableAutoConfiguration
 public class DeploymentBranch extends ServerComponentBean implements DeploymentBranchMBean, PathWatchEventListener {
 	/** The deployment directory represented by this deployment branch */
 	protected final File deploymentDir;
@@ -63,6 +66,8 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	protected final DeploymentBranchMBean parentBranch;
 	/** The watch key for this branch */
 	protected final WatchKey watchKey;
+	/** Indicates if this deployment branch is a root branch */
+	protected final boolean root;
 	
 	/** The deployment branch object name base */
 	public static final String OBJECT_NAME_BASE = "com.heliosapm.watchtower.deployment:type=branch";
@@ -92,36 +97,28 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 		ObjectName parentObjectName = findParent(deploymentDir.getParentFile());
 		if(parentObjectName!=null) {
 			objectName = JMXHelper.objectName(new StringBuilder(parentObjectName.toString()).append(",").append(dirKey).append("=").append(dirValue));
+			if(JMXHelper.isRegistered(parentObjectName)) {
+				parentBranch = (DeploymentBranchMBean)JMXHelper.getAttribute(parentObjectName, "ParentBranch");
+			} else {
+				parentBranch = null;
+			}			
+			root = false;
 		} else {
 			objectName = JMXHelper.objectName(new StringBuilder(OBJECT_NAME_BASE).append(",").append(dirKey).append("=").append(dirValue));
-		}
-		if(JMXHelper.isRegistered(parentObjectName)) {
-			parentBranch = (DeploymentBranchMBean)JMXHelper.getAttribute(parentObjectName, "ParentBranch");
-		} else {
 			parentBranch = null;
+			root = true;
 		}
 	}
 	
+	public void onApplicationEvent(final ApplicationContextEvent event) {
+		if(event.getApplicationContext()==this.applicationContext) return;
+		if(eventExecutor==null) {
+			EventExecutor ee =  this.applicationContext.getBean("eventExecutor", EventExecutor.class);
+			eventExecutor = ee;
+		}
+		super.onApplicationEvent(event);
 
-	
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onPathEvent(java.nio.file.WatchEvent)
-	 */
-	@Override
-	public void onPathEvent(WatchEvent<Path> event) {
-		if(event==null) return;
-		if (event == OVERFLOW) {			
-			return;
-		} else if (event == ENTRY_CREATE || event == ENTRY_MODIFY || event == ENTRY_DELETE ) {
-	        Path filename = event.context();
-	        log.info("============== {} -- {} [{}] ==============", event.kind().type(), filename, event.count());
-		} else {
-			warn("Unrecognized WatchEvent type [{}]", event.kind().type().getName());
-		}
-		
 	}
-	
 	
 	/**
 	 * Finds the ObjectName of the theoretical parent
@@ -239,27 +236,68 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 		
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryDeleted(java.io.File)
+	 */
+	@Override
+	public void onDirectoryDeleted(File dir) {
+		log.info("----> Directory Deleted [{}]", dir);
+	}
 
-//	/**
-//	 * {@inheritDoc}
-//	 * @see org.springframework.context.event.ApplicationEventMulticaster#addApplicationListener(org.springframework.context.ApplicationListener)
-//	 */
-//	@Override
-//	public void addApplicationListener(ApplicationListener<?> listener) {
-//		// TODO Auto-generated method stub
-//		
-//	}
-//
-//
-//	/**
-//	 * {@inheritDoc}
-//	 * @see org.springframework.context.event.ApplicationEventMulticaster#removeApplicationListener(org.springframework.context.ApplicationListener)
-//	 */
-//	@Override
-//	public void removeApplicationListener(ApplicationListener<?> listener) {
-//		// TODO Auto-generated method stub
-//		
-//	}
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryModified(java.io.File)
+	 */
+	@Override
+	public void onDirectoryModified(File dir) {
+		log.info("----> Directory Modified [{}]", dir);
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onDirectoryCreated(java.io.File)
+	 */
+	@Override
+	public void onDirectoryCreated(File dir) {
+		log.info("----> Directory Created [{}]", dir);
+	}
+	
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileCreated(java.io.File)
+	 */
+	@Override
+	public void onFileCreated(File file) {
+		log.info("----> File Created [{}]", file);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileDeleted(java.io.File)
+	 */
+	@Override
+	public void onFileDeleted(File file) {
+		log.info("----> File Deleted [{}]", file);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.PathWatchEventListener#onFileModified(java.io.File)
+	 */
+	@Override
+	public void onFileModified(File file) {
+		log.info("----> File Modified [{}]", file);
+	}
+
+	/**
+	 * Indicates if this deployment branch is a root branch
+	 * @return true if this deployment branch is a root branch, false otherwise
+	 */
+	public boolean isRoot() {
+		return root;
+	}
 
 
 	
