@@ -39,12 +39,15 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.management.Notification;
 import javax.management.ObjectName;
 
+import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.SystemClock;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.core.env.Environment;
+import org.springframework.jmx.export.annotation.ManagedAttribute;
 import org.springframework.jmx.export.annotation.ManagedNotification;
 import org.springframework.jmx.export.annotation.ManagedNotifications;
-import org.springframework.jmx.export.annotation.ManagedResource;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
 
@@ -55,24 +58,52 @@ import com.heliosapm.watchtower.component.ServerComponentBean;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.deployer.DeploymentBranch</code></p>
  */
-@EnableAutoConfiguration
+
 @ManagedNotifications({
 	@ManagedNotification(notificationTypes={"com.heliosapm.watchtower.deployer.DeploymentBranch.start"}, name="javax.management.Notification", description="Notifies when a new DeploymentBranch has started")
 })
-@ManagedResource
-public class DeploymentBranch extends ServerComponentBean implements DeploymentBranchMBean, PathWatchEventListener {
+
+public class DeploymentBranch extends ServerComponentBean implements /* DeploymentBranchMBean, */ PathWatchEventListener, EnvironmentAware {
 	/** The deployment directory represented by this deployment branch */
-	protected final File deploymentDir;
+	protected File deploymentDir;
+
 	/** The directory name key */
-	protected final String dirKey;
+	protected String dirKey;
 	/** The directory name value */
-	protected final String dirValue;
+	protected String dirValue;
 	/** This branch's parent branch */
-	protected final DeploymentBranchMBean parentBranch;
+	protected DeploymentBranchMBean parentBranch;
 	/** The watch key for this branch */
-	protected final WatchKey watchKey;
+	protected WatchKey watchKey;
 	/** Indicates if this deployment branch is a root branch */
-	protected final boolean root;
+	protected boolean root;
+	
+	/** The spring app supplied environment */
+	protected Environment environment = null;
+	
+	/**
+	 * Returns the 
+	 * @return the environment
+	 */
+	public Environment getEnvironment() {
+		return environment;
+	}
+
+	/**
+	 * Sets the 
+	 * @param environment the environment to set
+	 */
+	public void setEnvironment(Environment environment) {
+		this.environment = environment;
+		onEnvironmentSet();
+	}
+
+	/** A map of deployed objects keyed by the relative name of the file they were loaded from */
+	protected final NonBlockingHashMap<String, Object> deployments = new NonBlockingHashMap<String, Object>();
+
+	
+	/** The class loader designated for this branch */
+	protected ClassLoader classLoader = null;
 	
 	/** The deployment branch object name base */
 	public static final String OBJECT_NAME_BASE = "com.heliosapm.watchtower.deployment:type=branch";
@@ -86,19 +117,27 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	/**
 	 * Creates a new DeploymentBranch
 	 * @param deploymentDir the deployment directory represented by this deployment branch
+	 * @param classLoader The class loader designated for this branch
 	 */
-	public DeploymentBranch(File deploymentDir) {
+	public DeploymentBranch() {  // File deploymentDir, ClassLoader classLoader
+	}
+	
+	protected void onEnvironmentSet() {
+		deploymentDir = environment.getProperty("branch-file", File.class);
+		classLoader = environment.getProperty("branch-cl", ClassLoader.class);
 		if(deploymentDir==null || !deploymentDir.isDirectory()) throw new IllegalArgumentException("The passed deployment directory was invalid [" + deploymentDir + "]");
 		String[] dirPair = dirPair(deploymentDir);
-		if(dirPair.length==1) throw new IllegalArgumentException("The passed deployment directory [" + deploymentDir + "] is invalid: [" + dirPair[0] + "]");
-		this.deploymentDir = deploymentDir;
-		Path path = Paths.get(this.deploymentDir.getPath());
-		watchKey =  DeploymentWatchService.getWatchService().getWatchKey(path, this, WATCH_EVENT_TYPES);
+		if(dirPair.length==1) {
+			dirPair = new String[]{"root", deploymentDir.getName()};
+			//throw new IllegalArgumentException("The passed deployment directory [" + deploymentDir + "] is invalid: [" + dirPair[0] + "]");
+		}
+		Path path = Paths.get(this.deploymentDir.getPath());		
 		dirKey = dirPair[0];
 		if("branch".equals(dirKey)) {
 			throw new IllegalArgumentException("The passed deployment directory [" + deploymentDir + "] has an illegal key: [" + dirPair[0] + "]");
 		}
 		dirValue = dirPair[1];
+		
 		ObjectName parentObjectName = findParent(deploymentDir.getParentFile());
 		if(parentObjectName!=null) {
 			objectName = JMXHelper.objectName(new StringBuilder(parentObjectName.toString()).append(",").append(dirKey).append("=").append(dirValue));
@@ -113,7 +152,16 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 			parentBranch = null;
 			root = true;
 		}
+		
+		
 	}
+	
+//	protected void doStart() {
+//		watchKey =  DeploymentWatchService.getWatchService().getWatchKey(deploymentDir.toPath(), this, WATCH_EVENT_TYPES);
+//		fireSubContextStarted();			
+//	}
+//	
+//	
 	
 	/** JMX notification serial */
 	protected final AtomicLong notificationSerial = new AtomicLong(0L);
@@ -122,7 +170,32 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	 * Sends a SubContext started notification
 	 */
 	protected void fireSubContextStarted() {
-		notificationPublisher.sendNotification(new Notification("", objectName, notificationSerial.incrementAndGet(), SystemClock.time(), "Started SubContext [" + deploymentDir + "]"));
+		notificationPublisher.sendNotification(new Notification("com.heliosapm.watchtower.deployer.DeploymentBranch.start", objectName, notificationSerial.incrementAndGet(), SystemClock.time(), "Started SubContext [" + deploymentDir + "]"));
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getDirectoryName()
+	 */
+//	@Override
+	@ManagedAttribute
+	public String getDirectoryName() {
+		return deploymentDir.getAbsolutePath();
+	}
+	
+	public boolean isWatchKeyValid() {
+		if(watchKey==null) return false;
+		return watchKey.isValid();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getClassLoader()
+	 */
+//	@Override
+	@ManagedAttribute	
+	public String getClassLoader() {
+		return classLoader.toString();
 	}
 	
 	/**
@@ -182,6 +255,23 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	}
 	
 	/**
+	 * Sets the deployment directory
+	 * @param deploymentDir the deploymentDir to set
+	 */
+	public void setDeploymentDir(File deploymentDir) {
+		this.deploymentDir = deploymentDir;
+	}
+
+	/**
+	 * Sets the classloader
+	 * @param classLoader the classLoader to set
+	 */
+	public void setClassLoader(ClassLoader classLoader) {
+		this.classLoader = classLoader;
+	}
+	
+	
+	/**
 	 * {@inheritDoc}
 	 * @see com.heliosapm.watchtower.component.ServerComponentBean#getObjectName()
 	 */
@@ -194,7 +284,8 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	 * {@inheritDoc}
 	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getDirKey()
 	 */
-	@Override
+//	@Override
+	@ManagedAttribute
 	public String getDirKey() {
 		return dirKey;
 	}
@@ -203,7 +294,8 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	 * {@inheritDoc}
 	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getDirValue()
 	 */
-	@Override
+//	@Override
+	@ManagedAttribute
 	public String getDirValue() {
 		return dirValue;
 	}
@@ -212,7 +304,8 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	 * {@inheritDoc}
 	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getParentBranch()
 	 */
-	@Override
+//	@Override
+	@ManagedAttribute
 	public DeploymentBranchMBean getParentBranch() {
 		return parentBranch;
 	}
@@ -297,9 +390,10 @@ public class DeploymentBranch extends ServerComponentBean implements DeploymentB
 	}
 
 	/**
-	 * Indicates if this deployment branch is a root branch
-	 * @return true if this deployment branch is a root branch, false otherwise
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#isRoot()
 	 */
+	@ManagedAttribute
 	public boolean isRoot() {
 		return root;
 	}

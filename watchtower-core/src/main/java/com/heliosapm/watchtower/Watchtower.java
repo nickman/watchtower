@@ -25,6 +25,7 @@
 package com.heliosapm.watchtower;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.helios.jmx.util.helpers.StringHelper;
 import org.slf4j.Logger;
@@ -69,8 +70,11 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	/** The static watchtower instance */
 	protected static Watchtower watchtower = null;
 	
+	/** The cl option to disable web */
+	public static final String NO_WEB_CL = "--noweb";
+	
 	/** Static class logger */	
-	protected static final Logger LOG = LoggerFactory.getLogger(Watchtower.class);
+	protected static Logger LOG = null;
 	
 //	/**
 //	 * Creates a new Watchtower
@@ -83,7 +87,7 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 //	}
 	
 	public Watchtower() {
-		
+		LOG = LoggerFactory.getLogger(Watchtower.class);
 	}
 	
 	@RequestMapping("/")	
@@ -101,9 +105,15 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	 */
 	public static void main(String[] args) {
 		WatchtowerApplication wapp = new WatchtowerApplication(Watchtower.class);
-		wapp.setWebEnvironment(true);
+		boolean webEnabled = true;
+		if(args!=null && args.length>0) {
+			if(Arrays.binarySearch(args, NO_WEB_CL) >= 0) {
+				webEnabled = false;
+			}
+		}
+		wapp.setWebEnvironment(webEnabled);
 		wapp.run(args);
-		LOG.info(StringHelper.banner("Watchtower Started"));
+		LOG = LoggerFactory.getLogger(Watchtower.class);
 	}
 
 	/**
@@ -126,7 +136,7 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 			" http://www.springframework.org/schema/aop" + 
 			" http://www.springframework.org/schema/aop/spring-aop.xsd" + 
 			" http://www.springframework.org/schema/context" + 
-			" http://www.springframework.org/schema/context/spring-context.xsd\">"; // <context:annotation-config/>
+			" http://www.springframework.org/schema/context/spring-context.xsd\"><context:annotation-config/>"; // <context:annotation-config/>
 	
 	/**
 	 * {@inheritDoc}
@@ -153,11 +163,15 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 		children.setParent(appCtx);
 		
 		coreCtx = children.run();
-		StringBuilder b = new StringBuilder();
-		for(String s: coreCtx.getBeanDefinitionNames()) {
-			b.append("\n\t\t").append(s);
+		if(LOG.isDebugEnabled()) {
+			StringBuilder b = new StringBuilder();
+			for(String s: coreCtx.getBeanDefinitionNames()) {
+				b.append("\n\t\t").append(s);
+			}
+			LOG.debug(StringHelper.banner("Watchtower Core Services Started\n\tBeans: {}"), b.toString());
+		} else {
+			LOG.info("Watchtower Core Services Started");
 		}
-		LOG.info(StringHelper.banner("Watchtower Core Services Started\n\tBeans: {}"), b.toString());
 		// LOG.info(StringHelper.banner("Started SubContext: [{}]\n\tBean Names:{}"), appCtx.getId(), Arrays.toString(appCtx.getBeanDefinitionNames()));
 	}
 

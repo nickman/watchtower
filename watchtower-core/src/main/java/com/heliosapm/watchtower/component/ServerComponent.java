@@ -88,7 +88,9 @@ public abstract class ServerComponent implements ServerComponentMXBean  {
 	 */
 	@ManagedAttribute(description="The logging level of this component")
 	public String getLevel() {
-		return log.getLevel().toString();
+		Level level = log.getLevel();
+		if(level==null) return null;
+		return level.toString();
 	}
 	
 	/**

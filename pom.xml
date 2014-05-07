@@ -33,6 +33,7 @@
 		<spring.version>4.0.3.RELEASE</spring.version>		
 		<slf4j.version>1.7.7</slf4j.version>
 		<logback.version>1.1.2</logback.version>
+		<jolokia.version>1.2.0</jolokia.version>
 		<!-- Plugin Versions -->
 		<jar-plugin.version>2.3</jar-plugin.version>
 		<source-plugin.version>2.2</source-plugin.version>
@@ -155,6 +156,13 @@
 		  <artifactId>jmxremote_optional</artifactId>
 		  <version>${jmx-optional.version}</version>
 		</dependency>
+
+		<dependency>
+		    <groupId>org.jolokia</groupId>
+		    <artifactId>jolokia-core</artifactId>
+		    <version>${jolokia.version}</version>
+		</dependency>
+
 
 	      <!-- ==========================================================
 		Byte Code Injection

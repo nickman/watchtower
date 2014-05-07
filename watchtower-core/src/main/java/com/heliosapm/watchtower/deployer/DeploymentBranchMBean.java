@@ -24,6 +24,8 @@
  */
 package com.heliosapm.watchtower.deployer;
 
+import org.springframework.jmx.export.annotation.ManagedAttribute;
+
 import com.heliosapm.watchtower.component.ServerComponentBeanMXBean;
 
 /**
@@ -52,5 +54,30 @@ public interface DeploymentBranchMBean extends ServerComponentBeanMXBean {
 	 * @return the directory key value
 	 */
 	public String getDirValue();
+	
+	/**
+	 * Returns the absolute directory name for this branch
+	 * @return the absolute directory name for this branch
+	 */
+	public String getDirectoryName();
+	
+	/**
+	 * Returns the to string of the classloader for this branch
+	 * @return the to string of the classloader for this branch
+	 */
+	public String getClassLoader();
+	
+	/**
+	 * Indicates if the watch key is valid
+	 * @return true if the watch key is valid, false otherwise
+	 */
+	public boolean isWatchKeyValid();
+	
+	/**
+	 * Indicates if this deployment branch is a root branch
+	 * @return true if this deployment branch is a root branch, false otherwise
+	 */
+	@ManagedAttribute(description="Indicates if this deployment branch is a root branch")
+	public boolean isRoot();
 
 }

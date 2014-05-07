@@ -50,6 +50,9 @@ import org.helios.jmx.util.helpers.ConfigurationHelper;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jmx.export.annotation.ManagedNotification;
+import org.springframework.jmx.export.annotation.ManagedNotifications;
 
 import ch.qos.logback.classic.Logger;
 
@@ -65,11 +68,18 @@ import com.heliosapm.watchtower.core.EventExecutorMBean;
  */
 
 @EnableAutoConfiguration
+@ManagedNotifications({
+	@ManagedNotification(notificationTypes={"com.heliosapm.watchtower.deployer.DeploymentBranch.start"}, name="javax.management.Notification", description="Notifies when a new DeploymentBranch has started")
+})
+
 public class DeploymentWatchService extends ServerComponentBean implements Runnable, PathWatchEventListener {
 	/** The singleton instance */
 	private static volatile DeploymentWatchService instance = null;
 	/** The singleton instance ctor lock */
 	private static final Object lock = new Object();
+	
+	/** Indicates if the service is started */
+	private final AtomicBoolean started = new AtomicBoolean(false);
 	
 	/** The deployment root paths */
 	private final Set<Path> deploymentRoots = new CopyOnWriteArraySet<Path>();
@@ -130,6 +140,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 * Starts the watch service
 	 */
 	protected void doStart() {
+		if(started.get()) return;
 		log.info(StringHelper.banner("Starting DeploymentWatchService....."));
 		// Start the delay queue processor
 		delayQueueProcessor.start();
@@ -138,7 +149,12 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 			startDeploymentRootWatcher(path);
 		}
 		this.applicationContext.getAutowireCapableBeanFactory().autowireBean(this);
+		for(Path path: deploymentRoots) {
+			//enqueueFileEvent(0, new FileEvent(path.toAbsolutePath().toFile().getAbsolutePath(), ENTRY_CREATE, this));
+			SubContextBoot.main(path.toAbsolutePath().toFile(), applicationContext);
+		}
 		log.info(StringHelper.banner("DeploymentWatchService Started"));
+		started.set(true);
 	}
 
 	/**
@@ -562,6 +578,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onDirectoryCreated(File dir) {
+		if(!started.get()) return;
 		log.info("----> Directory Created [{}]", dir);
 		SubContextBoot.main(dir, this.applicationContext);
 		
@@ -573,6 +590,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onDirectoryDeleted(File dir) {
+		if(!started.get()) return;
 		log.info("----> Directory Deleted [{}]", dir);
 	}
 
@@ -582,6 +600,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onDirectoryModified(File dir) {
+		if(!started.get()) return;
 		log.info("----> Directory Modified [{}]", dir);
 	}
 
@@ -591,6 +610,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onFileCreated(File file) {
+		if(!started.get()) return;
 		log.info("----> File Created [{}]", file);
 	}
 
@@ -600,6 +620,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onFileDeleted(File file) {
+		if(!started.get()) return;
 		log.info("----> File Deleted [{}]", file);
 	}
 
@@ -609,6 +630,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	@Override
 	public void onFileModified(File file) {
+		if(!started.get()) return;
 		log.info("----> File Modified [{}]", file);
 	}
 
