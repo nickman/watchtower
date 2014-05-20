@@ -27,28 +27,26 @@ package com.heliosapm.watchtower.component;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.lang.reflect.Method;
 import java.util.Date;
-import java.util.EnumMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-import javax.management.StandardMBean;
-
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import org.helios.jmx.annotation.ManagedAttribute;
+import org.helios.jmx.annotation.ManagedMetricImpl;
+import org.helios.jmx.annotation.ManagedResource;
+import org.helios.jmx.annotation.MetricType;
+import org.helios.jmx.annotation.Reflector;
+import org.helios.jmx.mbean.ManagedObjectBaseMBean;
 import org.helios.jmx.metrics.ewma.Counter;
-import org.helios.jmx.metrics.ewma.DirectEWMA;
+import org.helios.jmx.metrics.ewma.IMetricSetter;
 import org.slf4j.LoggerFactory;
-import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedMetric;
-import org.springframework.jmx.export.annotation.ManagedOperation;
-import org.springframework.jmx.support.MetricType;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
+
+import com.heliosapm.watchtower.component.metric.ManagedConcurrentDirectEWMA;
+import com.heliosapm.watchtower.component.metric.ManagedCounter;
 
 /**
  * <p>Title: StdServerComponent</p>
@@ -57,17 +55,18 @@ import ch.qos.logback.classic.LoggerContext;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.component.StdServerComponent</code></p>
  */
+@ManagedResource
+public class StdServerComponent extends ManagedObjectBaseMBean {
 
-public class StdServerComponent extends StandardMBean {
 	/** The logger context */
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
 	protected Logger log = logCtx.getLogger(getClass());
 
 	/** Gauge Metrics accumulator */
-	protected final NonBlockingHashMap<String, DirectEWMA> ewmas = new NonBlockingHashMap<String, DirectEWMA>();
+	protected final NonBlockingHashMap<String, ManagedConcurrentDirectEWMA> ewmas = new NonBlockingHashMap<String, ManagedConcurrentDirectEWMA>();
 	/** Counter Metrics accumulator */
-	protected final NonBlockingHashMap<String, Counter> counters = new NonBlockingHashMap<String, Counter>();
+	protected final NonBlockingHashMap<String, ManagedCounter> counters = new NonBlockingHashMap<String, ManagedCounter>();
 
 	/** The last reset time of these metrics */
 	protected AtomicLong lastMetricResetTime = new AtomicLong(System.currentTimeMillis());
@@ -83,6 +82,55 @@ public class StdServerComponent extends StandardMBean {
 	 */
 	public StdServerComponent(Class<?> mbeanInterface, boolean isMXBean) {
 		super(mbeanInterface, isMXBean);
+		for(ManagedMetricImpl mmi: Reflector.getMetricAccessors(this, MetricType.COUNTER)) {
+			counters.put(mmi.getDisplayName(), new ManagedCounter(mmi));
+		}
+		for(ManagedMetricImpl mmi: Reflector.getMetricAccessors(this, MetricType.GAUGE)) {
+			ewmas.put(mmi.getDisplayName(), new ManagedConcurrentDirectEWMA(mmi));
+		}		
+	}
+	
+	/**
+	 * Retrieves the current counter value for the named metric
+	 * @param name The name of the counter
+	 * @return the current value of the named counter
+	 */
+	protected long getCounterValue(String name) {
+		Counter counter = counters.get(name);
+		if(counter==null) throw new IllegalArgumentException("No metric named [" + name + "]");
+		return counter.getValue();
+	}
+	
+	/**
+	 * Appends the passed value to the named counter
+	 * @param name The name of the counter to append to
+	 * @param value The value to append
+	 */
+	protected void appendMetric(String name, double value) {
+		IMetricSetter ims = counters.get(name);
+		if(ims==null) {
+			ims = ewmas.get(name);
+			if(ims==null) throw new IllegalArgumentException("No metric named [" + name + "]");
+		}
+		ims.append(value);
+	}
+
+	/**
+	 * Appends the passed value to the named counter
+	 * @param name The name of the counter to append to
+	 * @param value The value to append
+	 */
+	protected void appendMetric(String name, long value) {
+		appendMetric(name, (double)value);
+	}
+
+	/**
+	 * Appends the passed value to the named counter
+	 * @param name The name of the counter to append to
+	 * @param value The value to append
+	 */
+	protected void appendMetric(String name, int value) {
+		appendMetric(name, (double)value);
 	}
 
 	/**
@@ -93,12 +141,13 @@ public class StdServerComponent extends StandardMBean {
 		this(mbeanInterface, false);
 	}
 	
+	
 	/**
 	 * Starts this component
 	 * @throws Exception thrown if start fails
 	 */
 	public void start() throws Exception {
-		initCounters();		
+//		initCounters();		
 	}
 	
 	/**
@@ -251,123 +300,123 @@ public class StdServerComponent extends StandardMBean {
 		return baos.toString();
 	}
 	
-	/**
-	 * Returns the metric names implemented by this component
-	 * @return the metric names implemented by this component
-	 */
-	public Map<MetricType, Set<String>> getSupportedMetricNames() {
-		Map<MetricType, Set<String>> map = new EnumMap<MetricType, Set<String>>(MetricType.class);
-		for(MetricType mt: MetricType.values()) {
-			map.put(mt, new HashSet<String>());
-		}
-		
-		try {
-			for(Method method: this.getClass().getMethods()) {
-				ManagedMetric mm = method.getAnnotation(ManagedMetric.class);
-				if(mm!=null) {
-					String name = mm.category();
-					if(name!=null && !name.trim().isEmpty()) {
-						metrics.add(name.trim());
-					}
-				}
-			}
-			
-			for(Method method: this.getClass().getDeclaredMethods()) {
-				ManagedMetric mm = method.getAnnotation(ManagedMetric.class);
-				if(mm!=null) {
-					String name = mm.category();
-					if(name!=null && !name.trim().isEmpty()) {
-						metrics.add(name.trim());
-					}
-				}
-			}
-		} catch (Exception ex) {
-			ex.printStackTrace(System.err);
-		}
-		return metrics;
-		
-	}
+//	/**
+//	 * Returns the metric names implemented by this component
+//	 * @return the metric names implemented by this component
+//	 */
+//	public Map<MetricType, Set<String>> getSupportedMetricNames() {
+//		Map<MetricType, Set<String>> map = new EnumMap<MetricType, Set<String>>(MetricType.class);
+//		for(MetricType mt: MetricType.values()) {
+//			map.put(mt, new HashSet<String>());
+//		}
+//		
+//		try {
+//			for(Method method: this.getClass().getMethods()) {
+//				ManagedMetric mm = method.getAnnotation(ManagedMetric.class);
+//				if(mm!=null) {
+//					String name = mm.category();
+//					if(name!=null && !name.trim().isEmpty()) {
+//						metrics.add(name.trim());
+//					}
+//				}
+//			}
+//			
+//			for(Method method: this.getClass().getDeclaredMethods()) {
+//				ManagedMetric mm = method.getAnnotation(ManagedMetric.class);
+//				if(mm!=null) {
+//					String name = mm.category();
+//					if(name!=null && !name.trim().isEmpty()) {
+//						metrics.add(name.trim());
+//					}
+//				}
+//			}
+//		} catch (Exception ex) {
+//			ex.printStackTrace(System.err);
+//		}
+//		return metrics;
+//		
+//	}
 	
 
 	
-	/**
-	 * Initializes the metric counters for this component
-	 */
-	protected void initCounters() {
-		for(String name: getSupportedMetricNames()) {
-			name = name.trim();
-			if(!metrics.containsKey(name)) {
-				metrics.put(name, new Counter());
-			}
-		}
-	}
+//	/**
+//	 * Initializes the metric counters for this component
+//	 */
+//	protected void initCounters() {
+//		for(String name: getSupportedMetricNames()) {
+//			name = name.trim();
+//			if(!metrics.containsKey(name)) {
+//				metrics.put(name, new Counter());
+//			}
+//		}
+//	}
+//	
+//	protected Counter mget(String name) {
+//		Counter ctr = metrics.get(name);
+//		if(ctr==null) {
+//			ctr = new Counter();
+//			metrics.put(name, ctr);
+//		}		
+//		return ctr;
+//	}
 	
-	protected Counter mget(String name) {
-		Counter ctr = metrics.get(name);
-		if(ctr==null) {
-			ctr = new Counter();
-			metrics.put(name, ctr);
-		}		
-		return ctr;
-	}
-	
-	/**
-	 * Increments the named metric by the passed value
-	 * @param name The name of the metric
-	 * @param delta The amount to increment by
-	 */
-	protected void incr(String name, long delta) {
-		if(name==null) return;
-		mget(name).add(delta);
-	}
-	
-	/**
-	 * Decrements the named metric by the passed value
-	 * @param name The name of the metric
-	 * @param delta The amount to decrement by
-	 */
-	protected void decr(String name, long delta) {
-		if(name==null) return;
-		mget(name).add(-delta);
-	}
-	
-	/**
-	 * Decrements the named metric by 1
-	 * @param name The name of the metric
-	 */
-	protected void decr(String name) {
-		if(name==null) return;
-		mget(name).decrement();
-	}	
-	
-	
-	/**
-	 * Sets the named metric to the passed value
-	 * @param name The name of the metric
-	 * @param value The value to set to
-	 */
-	protected void set(String name, long value) {
-		if(name==null) return;
-		mget(name).set(value);
-	}
+//	/**
+//	 * Increments the named metric by the passed value
+//	 * @param name The name of the metric
+//	 * @param delta The amount to increment by
+//	 */
+//	protected void incr(String name, long delta) {
+//		if(name==null) return;
+//		mget(name).add(delta);
+//	}
+//	
+//	/**
+//	 * Decrements the named metric by the passed value
+//	 * @param name The name of the metric
+//	 * @param delta The amount to decrement by
+//	 */
+//	protected void decr(String name, long delta) {
+//		if(name==null) return;
+//		mget(name).add(-delta);
+//	}
+//	
+//	/**
+//	 * Decrements the named metric by 1
+//	 * @param name The name of the metric
+//	 */
+//	protected void decr(String name) {
+//		if(name==null) return;
+//		mget(name).decrement();
+//	}	
 	
 	
-	/**
-	 * Increments the named metric by 1
-	 * @param name The name of the metric
-	 */
-	protected void incr(String name) {
-		incr(name, 1);
-	}
+//	/**
+//	 * Sets the named metric to the passed value
+//	 * @param name The name of the metric
+//	 * @param value The value to set to
+//	 */
+//	protected void set(String name, long value) {
+//		if(name==null) return;
+//		mget(name).set(value);
+//	}
+//	
+//	
+//	/**
+//	 * Increments the named metric by 1
+//	 * @param name The name of the metric
+//	 */
+//	protected void incr(String name) {
+//		incr(name, 1);
+//	}
 	
-	/**
-	 * Returns the value of the named metric
-	 * @param name The name of the metric
-	 * @return the value of the named metric
-	 */
-	protected long getMetricValue(String name) {
-		return mget(name).get();
-	}
+//	/**
+//	 * Returns the value of the named metric
+//	 * @param name The name of the metric
+//	 * @return the value of the named metric
+//	 */
+//	protected long getMetricValue(String name) {
+//		return mget(name).get();
+//	}
 	
 	/**
 	 * Shortcut to get a logger
@@ -389,24 +438,24 @@ public class StdServerComponent extends StandardMBean {
 	
 	
 	
-	/**
-	 * Resets all the metrics
-	 */
-	@ManagedOperation
-	public void resetMetrics() {
-		for(Counter ctr: metrics.values()) {
-			ctr.set(0);
-		}
-	}
-	
-	/**
-	 * Returns the names of the metrics supported by this component
-	 * @return the names of the metrics supported by this component
-	 */
-	@ManagedAttribute
-	public String[] getMetricNames() {
-		return metrics.keySet().toArray(new String[metrics.size()]);
-	}
+//	/**
+//	 * Resets all the metrics
+//	 */
+//	@ManagedOperation
+//	public void resetMetrics() {
+//		for(Counter ctr: metrics.values()) {
+//			ctr.set(0);
+//		}
+//	}
+//	
+//	/**
+//	 * Returns the names of the metrics supported by this component
+//	 * @return the names of the metrics supported by this component
+//	 */
+//	@ManagedAttribute
+//	public String[] getMetricNames() {
+//		return metrics.keySet().toArray(new String[metrics.size()]);
+//	}
 	
 	/**
 	 * Returns the UTC long timestamp of the last time the metrics were reset
