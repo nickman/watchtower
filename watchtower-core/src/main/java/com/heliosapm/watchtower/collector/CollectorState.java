@@ -22,39 +22,33 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package com.heliosapm.watchtower.component;
-
-import org.helios.jmx.annotation.ManagedAttribute;
+package com.heliosapm.watchtower.collector;
 
 /**
- * <p>Title: StdServerComponentMBean</p>
- * <p>Description: Implementation interface for {@link StdServerComponent}</p> 
+ * <p>Title: CollectorState</p>
+ * <p>Description: Enumerates the possible states of a collector bean</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.watchtower.component.StdServerComponentMBean</code></p>
+ * <p><code>com.heliosapm.watchtower.collector.CollectorState</code></p>
  */
 
-public interface StdServerComponentMBean {
-	/**
-	 * Returns the level of this components logger
-	 * @return the level of this components logger
-	 */
-	@ManagedAttribute(description="The logging level of this component")
-	public String getLevel();
-	
-	/**
-	 * Returns the effective level of this components logger
-	 * @return the effective level of this components logger
-	 */
-	@ManagedAttribute(description="The effective logging level of this component")
-	public String getEffectiveLevel();
-
-	/**
-	 * Sets the logging level for this instance
-	 * @param levelName the name of the logging level for this instance
-	 */
-	@ManagedAttribute(description="The logging level of this component")
-	public void setLevel(String levelName);
-	
-
+public enum CollectorState {
+	/** The bean is initialized but not started yet */
+	INIT,
+	/** The bean is started and stable */
+	STARTED,
+	/** The bean is paused */
+	PAUSED,
+	/** The bean is stopped */
+	STOPPED,
+	/** The bean is collecting */
+	COLLECTING,
+	/** The bean is broken meaning it could not be initialized or started, typically a config problem */
+	BROKEN,
+	/** The script underlying the bean has a compile error */
+	BUST,
+	/** The bean has been isolated on account of serial collection or connection errors */
+	ISOLATED,
+	/** The bean is in a blackout window */
+	BLACKOUT;
 }

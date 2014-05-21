@@ -27,26 +27,14 @@ package com.heliosapm.watchtower.component;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Date;
-import java.util.concurrent.atomic.AtomicLong;
 
-import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.helios.jmx.annotation.ManagedAttribute;
-import org.helios.jmx.annotation.ManagedMetricImpl;
 import org.helios.jmx.annotation.ManagedResource;
-import org.helios.jmx.annotation.MetricType;
-import org.helios.jmx.annotation.Reflector;
-import org.helios.jmx.mbean.ManagedObjectBaseMBean;
-import org.helios.jmx.metrics.ewma.Counter;
-import org.helios.jmx.metrics.ewma.IMetricSetter;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
-
-import com.heliosapm.watchtower.component.metric.ManagedConcurrentDirectEWMA;
-import com.heliosapm.watchtower.component.metric.ManagedCounter;
 
 /**
  * <p>Title: StdServerComponent</p>
@@ -56,110 +44,20 @@ import com.heliosapm.watchtower.component.metric.ManagedCounter;
  * <p><code>com.heliosapm.watchtower.component.StdServerComponent</code></p>
  */
 @ManagedResource
-public class StdServerComponent extends ManagedObjectBaseMBean {
+public class StdServerComponent implements StdServerComponentMBean {
 
 	/** The logger context */
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
 	protected Logger log = logCtx.getLogger(getClass());
 
-	/** Gauge Metrics accumulator */
-	protected final NonBlockingHashMap<String, ManagedConcurrentDirectEWMA> ewmas = new NonBlockingHashMap<String, ManagedConcurrentDirectEWMA>();
-	/** Counter Metrics accumulator */
-	protected final NonBlockingHashMap<String, ManagedCounter> counters = new NonBlockingHashMap<String, ManagedCounter>();
-
-	/** The last reset time of these metrics */
-	protected AtomicLong lastMetricResetTime = new AtomicLong(System.currentTimeMillis());
 
 	/** EOL bytes */
 	private static final byte[] EOL = "\n".getBytes();
-	
 
 	/**
-	 * Creates a new StdServerComponent
-	 * @param mbeanInterface The MBean interface that this service will implement
-	 * @param isMXBean true for an MXBean, false otherwise
-	 */
-	public StdServerComponent(Class<?> mbeanInterface, boolean isMXBean) {
-		super(mbeanInterface, isMXBean);
-		for(ManagedMetricImpl mmi: Reflector.getMetricAccessors(this, MetricType.COUNTER)) {
-			counters.put(mmi.getDisplayName(), new ManagedCounter(mmi));
-		}
-		for(ManagedMetricImpl mmi: Reflector.getMetricAccessors(this, MetricType.GAUGE)) {
-			ewmas.put(mmi.getDisplayName(), new ManagedConcurrentDirectEWMA(mmi));
-		}		
-	}
-	
-	/**
-	 * Retrieves the current counter value for the named metric
-	 * @param name The name of the counter
-	 * @return the current value of the named counter
-	 */
-	protected long getCounterValue(String name) {
-		Counter counter = counters.get(name);
-		if(counter==null) throw new IllegalArgumentException("No metric named [" + name + "]");
-		return counter.getValue();
-	}
-	
-	/**
-	 * Appends the passed value to the named counter
-	 * @param name The name of the counter to append to
-	 * @param value The value to append
-	 */
-	protected void appendMetric(String name, double value) {
-		IMetricSetter ims = counters.get(name);
-		if(ims==null) {
-			ims = ewmas.get(name);
-			if(ims==null) throw new IllegalArgumentException("No metric named [" + name + "]");
-		}
-		ims.append(value);
-	}
-
-	/**
-	 * Appends the passed value to the named counter
-	 * @param name The name of the counter to append to
-	 * @param value The value to append
-	 */
-	protected void appendMetric(String name, long value) {
-		appendMetric(name, (double)value);
-	}
-
-	/**
-	 * Appends the passed value to the named counter
-	 * @param name The name of the counter to append to
-	 * @param value The value to append
-	 */
-	protected void appendMetric(String name, int value) {
-		appendMetric(name, (double)value);
-	}
-
-	/**
-	 * Creates a new StdServerComponent as a standard (non-MX) MBean
-	 * @param mbeanInterface The MBean interface that this service will implement
-	 */
-	public StdServerComponent(Class<?> mbeanInterface) {
-		this(mbeanInterface, false);
-	}
-	
-	
-	/**
-	 * Starts this component
-	 * @throws Exception thrown if start fails
-	 */
-	public void start() throws Exception {
-//		initCounters();		
-	}
-	
-	/**
-	 * Stops this component
-	 */
-	public void stop() {
-		/* No Op */
-	}
-	
-	/**
-	 * Returns the level of this components logger
-	 * @return the level of this components logger
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.StdServerComponentMBean#getLevel()
 	 */
 	@ManagedAttribute(description="The logging level of this component")
 	public String getLevel() {
@@ -169,8 +67,8 @@ public class StdServerComponent extends ManagedObjectBaseMBean {
 	}
 	
 	/**
-	 * Returns the effective level of this components logger
-	 * @return the effective level of this components logger
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.StdServerComponentMBean#getEffectiveLevel()
 	 */
 	@ManagedAttribute(description="The effective logging level of this component")
 	public String getEffectiveLevel() {
@@ -178,8 +76,8 @@ public class StdServerComponent extends ManagedObjectBaseMBean {
 	}
 
 	/**
-	 * Sets the logging level for this instance
-	 * @param levelName the name of the logging level for this instance
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.StdServerComponentMBean#setLevel(java.lang.String)
 	 */
 	@ManagedAttribute(description="The logging level of this component")
 	public void setLevel(String levelName) {
@@ -236,6 +134,7 @@ public class StdServerComponent extends ManagedObjectBaseMBean {
 		logAtLevel(APMLogLevel.ERROR, msgs);
 	}
 	
+	private static final String[] EMPTY_STR_ARR = {}; 
 	/**
 	 * Forwards the logging directive if the current level is enabled for the passed level
 	 * @param l The requested level
@@ -243,7 +142,7 @@ public class StdServerComponent extends ManagedObjectBaseMBean {
 	 */
 	protected void logAtLevel(APMLogLevel l, Object...msgs) {
 		if(log.isEnabledFor(l.getLevel())) {
-			log.log(null, null, l.pCode(), format(msgs), new String[]{}, null);
+			log.log(null, null, l.pCode(), format(msgs), EMPTY_STR_ARR, null);
 		}				
 	}
 	
@@ -457,23 +356,23 @@ public class StdServerComponent extends ManagedObjectBaseMBean {
 //		return metrics.keySet().toArray(new String[metrics.size()]);
 //	}
 	
-	/**
-	 * Returns the UTC long timestamp of the last time the metrics were reset
-	 * @return a UTC long timestamp 
-	 */
-	@ManagedAttribute
-	public long getLastMetricResetTime() {
-		return lastMetricResetTime.get();
-	}
-
-	/**
-	 * Returns the java date timestamp of the last time the metrics were reset
-	 * @return a java date
-	 */
-	@ManagedAttribute
-	public Date getLastMetricResetDate() {
-		return new Date(lastMetricResetTime.get());
-	}
+//	/**
+//	 * Returns the UTC long timestamp of the last time the metrics were reset
+//	 * @return a UTC long timestamp 
+//	 */
+//	@ManagedAttribute
+//	public long getLastMetricResetTime() {
+//		return lastMetricResetTime.get();
+//	}
+//
+//	/**
+//	 * Returns the java date timestamp of the last time the metrics were reset
+//	 * @return a java date
+//	 */
+//	@ManagedAttribute
+//	public Date getLastMetricResetDate() {
+//		return new Date(lastMetricResetTime.get());
+//	}
 	
 	
 	
