@@ -36,6 +36,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.jmx.export.annotation.AnnotationMBeanExporter;
@@ -57,6 +59,7 @@ import com.heliosapm.watchtower.jmx.server.JMXMPServer;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.Watchtower</code></p>
  */
+@Configuration
 @RestController
 @EnableAutoConfiguration
 public class Watchtower extends TextWebSocketHandler implements ApplicationContextAware,  ApplicationListener<ContextRefreshedEvent> {

@@ -29,10 +29,14 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 
 import java.io.File;
+import java.io.FileFilter;
+import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,11 +47,11 @@ import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.SystemClock;
 import org.springframework.context.EnvironmentAware;
-import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.env.Environment;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
 import org.springframework.jmx.export.annotation.ManagedNotification;
 import org.springframework.jmx.export.annotation.ManagedNotifications;
+import org.springframework.jmx.export.annotation.ManagedResource;
 
 import com.heliosapm.watchtower.component.ServerComponentBean;
 
@@ -62,7 +66,7 @@ import com.heliosapm.watchtower.component.ServerComponentBean;
 @ManagedNotifications({
 	@ManagedNotification(notificationTypes={"com.heliosapm.watchtower.deployer.DeploymentBranch.start"}, name="javax.management.Notification", description="Notifies when a new DeploymentBranch has started")
 })
-
+@ManagedResource
 public class DeploymentBranch extends ServerComponentBean implements /* DeploymentBranchMBean, */ PathWatchEventListener, EnvironmentAware {
 	/** The deployment directory represented by this deployment branch */
 	protected File deploymentDir;
@@ -81,6 +85,25 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	/** The spring app supplied environment */
 	protected Environment environment = null;
 	
+	
+	
+	/** Groovy file filter */
+	protected static final FileFilter GROOVY_FILE_FILTER = new FileFilter() {
+		@Override
+		public boolean accept(File pathname) {
+			if(pathname!=null && pathname.isFile() && pathname.toString().toLowerCase().endsWith(".groovy")) return true;
+			return false;
+		}
+	};
+	
+	private static URL toURL(File f) {
+		try {
+			return f.toURI().toURL();
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to convert file [" + f + "] to URL", ex);
+		}
+	}
+	
 	/**
 	 * Returns the 
 	 * @return the environment
@@ -88,6 +111,8 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	public Environment getEnvironment() {
 		return environment;
 	}
+	
+	
 
 	/**
 	 * Sets the 
@@ -114,6 +139,18 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 		ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY
 	}; 
 	
+	/** Non lib sub dir file filter */
+	protected static final FileFilter SUBDIR_FILE_FILTER = new FileFilter() {
+		@Override
+		public boolean accept(File pathname) {
+			if(pathname!=null && pathname.isDirectory()) {
+				if(!pathname.toString().equalsIgnoreCase("lib") && !pathname.toString().equalsIgnoreCase("xlib")) return true;
+			}
+			return false;
+		}
+	};
+
+	
 	/**
 	 * Creates a new DeploymentBranch
 	 * @param deploymentDir the deployment directory represented by this deployment branch
@@ -121,6 +158,72 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	 */
 	public DeploymentBranch() {  // File deploymentDir, ClassLoader classLoader
 	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.watchtower.component.ServerComponentBean#doStart()
+	 */
+	protected void doStart() throws Exception {
+		super.doStart();
+		for(File subDir: deploymentDir.listFiles(SUBDIR_FILE_FILTER)) {
+			SubContextBoot.main(subDir, applicationContext);
+		}
+	}
+	
+//	protected void bootDeployment(final File subDeploy) {
+//		ClassLoader branchClassLoader = SubContextBoot.loadBranchLibs(subDeploy);
+//		Map<String, Object> env = new HashMap<String, Object>();
+//		env.put("branch-file", subDeploy);
+//		env.put("branch-cl", branchClassLoader);
+//		
+//		ConfigurableApplicationContext branchCtx = new AnnotationConfigApplicationContext();
+//		final Set<Object> resources = new LinkedHashSet<Object>();
+//		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
+//		try {
+//			Thread.currentThread().setContextClassLoader(branchClassLoader);	
+//			ByteArrayResource subContextXml = new ByteArrayResource(DEPLOYMENT_BRANCH.getBytes()) {
+//				/**
+//				 * {@inheritDoc}
+//				 * @see org.springframework.core.io.AbstractResource#getFilename()
+//				 */
+//				@Override
+//				public String getFilename() {				
+//					return "DeploymentBranch-" + subDeploy + ".xml"; 
+//				}
+//			};
+//			resources.add(subContextXml);
+//			for(File groovyFile: subDeploy.listFiles(GROOVY_FILE_FILTER)) {
+//				resources.add(new FileSystemResource(groovyFile));
+//			}
+////			WatchtowerApplication wapp = new WatchtowerApplication(Class.forName("com.heliosapm.watchtower.deployer.DeploymentBranch", true, branchClassLoader));
+//			WatchtowerApplication wapp = new WatchtowerApplication(resources.toArray());
+//			ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
+//			wapp.addInitializers(parentSetter);
+//	
+//			wapp.setDefaultProperties(env);
+//			wapp.setShowBanner(false);
+//			wapp.setWebEnvironment(false);
+//			branchCtx = wapp.run();
+//			branchCtx.setId("SubDeploy-[" + subDeploy + "]");
+//		} catch (Exception ex) {
+//			LOG.error("Failed to deploy Branch for [" + subDeploy + "]", ex);
+//			throw new RuntimeException(ex);
+//		} finally {
+//			Thread.currentThread().setContextClassLoader(cl);
+//		}
+//		if(LOG.isDebugEnabled()) {
+//			StringBuilder b = new StringBuilder();
+//			for(String s: branchCtx.getBeanDefinitionNames()) {
+//				b.append("\n\t\t").append(s);
+//			}
+//			LOG.debug(StringHelper.banner("Started SubContext: [{}]\n\tBean Names:{}"), branchCtx.getId(), b.toString());
+//		} else {
+//			LOG.info("Started SubContext: [{}]", branchCtx.getId());
+//		}
+//		
+//	}
+	
+	
 	
 	protected void onEnvironmentSet() {
 		deploymentDir = environment.getProperty("branch-file", File.class);
@@ -173,29 +276,21 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 		notificationPublisher.sendNotification(new Notification("com.heliosapm.watchtower.deployer.DeploymentBranch.start", objectName, notificationSerial.incrementAndGet(), SystemClock.time(), "Started SubContext [" + deploymentDir + "]"));
 	}
 	
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getDirectoryName()
-	 */
-//	@Override
 	@ManagedAttribute
 	public String getDirectoryName() {
 		return deploymentDir.getAbsolutePath();
 	}
 	
+	@ManagedAttribute
 	public boolean isWatchKeyValid() {
 		if(watchKey==null) return false;
 		return watchKey.isValid();
 	}
 	
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.watchtower.deployer.DeploymentBranchMBean#getClassLoader()
-	 */
-//	@Override
+
 	@ManagedAttribute	
-	public String getClassLoader() {
-		return classLoader.toString();
+	public ClassLoader getClassLoader() {
+		return classLoader;
 	}
 	
 	/**
@@ -396,6 +491,60 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	@ManagedAttribute
 	public boolean isRoot() {
 		return root;
+	}
+
+	/**
+	 * @return
+	 * @see org.springframework.context.ApplicationContext#getId()
+	 */
+	@ManagedAttribute
+	public String getAppCtxId() {
+		return applicationContext.getId();
+	}
+
+	/**
+	 * @return
+	 * @see org.springframework.context.ApplicationContext#getApplicationName()
+	 */
+	@ManagedAttribute
+	public String getApplicationName() {
+		return applicationContext.getApplicationName();
+	}
+
+	/**
+	 * @return
+	 * @see org.springframework.beans.factory.ListableBeanFactory#getBeanDefinitionCount()
+	 */
+	@ManagedAttribute
+	public int getBeanDefinitionCount() {
+		return applicationContext.getBeanDefinitionCount();
+	}
+
+	/**
+	 * @return
+	 * @see org.springframework.context.ApplicationContext#getDisplayName()
+	 */
+	@ManagedAttribute
+	public String getAppCtxDisplayName() {
+		return applicationContext.getDisplayName();
+	}
+
+	/**
+	 * @return
+	 * @see org.springframework.beans.factory.ListableBeanFactory#getBeanDefinitionNames()
+	 */
+	@ManagedAttribute
+	public String[] getBeanDefinitionNames() {
+		return applicationContext.getBeanDefinitionNames();
+	}
+	
+	@ManagedAttribute
+	public Map<String, String> getBeanDefinitionTypes() {
+		Map<String, String> map = new HashMap<String, String>(getBeanDefinitionCount());
+		for(String s: getBeanDefinitionNames()) {
+			map.put(s,  applicationContext.getBean(s).getClass().getName());
+		}
+		return map;
 	}
 
 

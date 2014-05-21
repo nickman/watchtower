@@ -52,8 +52,8 @@ import ch.qos.logback.classic.LoggerContext;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>org.helios.apmrouter.server.ServerComponent</code></p>
  */
-@ManagedResource
-public abstract class ServerComponent implements ServerComponentMXBean  {
+//@ManagedResource
+public abstract class ServerComponent { //implements ServerComponentMXBean  {
 	/** The logger context */
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */

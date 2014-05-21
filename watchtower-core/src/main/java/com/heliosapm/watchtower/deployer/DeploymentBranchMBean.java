@@ -62,10 +62,10 @@ public interface DeploymentBranchMBean extends ServerComponentBeanMXBean {
 	public String getDirectoryName();
 	
 	/**
-	 * Returns the to string of the classloader for this branch
-	 * @return the to string of the classloader for this branch
+	 * Returns the classloader for this branch
+	 * @return the classloader for this branch
 	 */
-	public String getClassLoader();
+	public ClassLoader getClassLoader();
 	
 	/**
 	 * Indicates if the watch key is valid

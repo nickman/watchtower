@@ -25,17 +25,20 @@
 package com.heliosapm.watchtower.deployer;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.helios.jmx.opentypes.otenabled.OpenTypeEnabledURLClassLoader;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,8 +48,9 @@ import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.GenericGroovyApplicationContext;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.jmx.export.annotation.AnnotationMBeanExporter;
+import org.springframework.core.io.FileSystemResource;
 
 import com.heliosapm.watchtower.Watchtower;
 import com.heliosapm.watchtower.WatchtowerApplication;
@@ -71,7 +75,7 @@ public class SubContextBoot {
 	public static final String BEANS_HEADER = "<beans xmlns=\"http://www.springframework.org/schema/beans\"" +
 			  " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" + 
 				" xmlns:aop=\"http://www.springframework.org/schema/aop\"" + 
-				" xmlns:context=\"http://www.springframework.org/schema/context\"" + 
+				" xmlns:context=\"http://www.springframework.org/schema/context\"" + 				
 				" xsi:schemaLocation=\"http://www.springframework.org/schema/beans" + 
 				" http://www.springframework.org/schema/beans/spring-beans.xsd" + 
 				" http://www.springframework.org/schema/aop" + 
@@ -82,22 +86,21 @@ public class SubContextBoot {
 	public static final String DEPLOYMENT_BRANCH = "<beans xmlns=\"http://www.springframework.org/schema/beans\"" +
 			  " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" + 
 				" xmlns:aop=\"http://www.springframework.org/schema/aop\"" + 
+				" xmlns:lang=\"http://www.springframework.org/schema/lang\"" + 
 				" xmlns:context=\"http://www.springframework.org/schema/context\"" + 
 				" xsi:schemaLocation=\"http://www.springframework.org/schema/beans" + 
 				" http://www.springframework.org/schema/beans/spring-beans.xsd" + 
 				" http://www.springframework.org/schema/aop" + 
-				" http://www.springframework.org/schema/aop/spring-aop.xsd" + 
+				" http://www.springframework.org/schema/aop/spring-aop.xsd" +
+				" http://www.springframework.org/schema/lang http://www.springframework.org/schema/lang/spring-lang.xsd" +
 				" http://www.springframework.org/schema/context" + 
 				" http://www.springframework.org/schema/context/spring-context.xsd\">" + 
-				
-				"<bean class=\"\"com.heliosapm.watchtower.deployer.DeploymentBranch\">" + 
-				
+				" <context:annotation-config/><context:mbean-export/> " + 
+				"<bean class=\"com.heliosapm.watchtower.deployer.DeploymentBranch\"/>" + 		
 				"</beans>";
 	
-	//<context:annotation-config/><context:mbean-export/>
 	
-	
-	public static void main(File subDeploy, ConfigurableApplicationContext parent) {
+	public static void main(final File subDeploy, ConfigurableApplicationContext parent) {
 		ClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 		Map<String, Object> env = new HashMap<String, Object>();
 		env.put("branch-file", subDeploy);
@@ -106,7 +109,17 @@ public class SubContextBoot {
 		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
 		try {
 			Thread.currentThread().setContextClassLoader(branchClassLoader);	
-			WatchtowerApplication wapp = new WatchtowerApplication(Class.forName("com.heliosapm.watchtower.deployer.DeploymentBranch", true, branchClassLoader));
+			ByteArrayResource subContextXml = new ByteArrayResource(DEPLOYMENT_BRANCH.getBytes()) {
+				/**
+				 * {@inheritDoc}
+				 * @see org.springframework.core.io.AbstractResource#getFilename()
+				 */
+				@Override
+				public String getFilename() {				
+					return "DeploymentBranch-" + subDeploy + ".xml"; 
+				}
+			};
+			WatchtowerApplication wapp = new WatchtowerApplication(subContextXml);
 			ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
 			wapp.addInitializers(parentSetter);
 	
@@ -115,6 +128,8 @@ public class SubContextBoot {
 			wapp.setWebEnvironment(false);
 			branchCtx = wapp.run();
 			branchCtx.setId("SubDeploy-[" + subDeploy + "]");
+			
+			
 		} catch (Exception ex) {
 			LOG.error("Failed to deploy Branch for [" + subDeploy + "]", ex);
 			throw new RuntimeException(ex);
@@ -206,7 +221,7 @@ public class SubContextBoot {
 			List<URL> jarUrls = listSourceFiles(pDir);
 			if(!jarUrls.isEmpty()) {
 				LOG.info("---LIBS: {}", jarUrls.toString());
-				return new URLClassLoader(jarUrls.toArray(new URL[jarUrls.size()]), Thread.currentThread().getContextClassLoader());
+				return new OpenTypeEnabledURLClassLoader(jarUrls.toArray(new URL[jarUrls.size()]), Thread.currentThread().getContextClassLoader());
 			}
 		} 
 		return Thread.currentThread().getContextClassLoader();

@@ -70,7 +70,7 @@ import org.springframework.stereotype.Component;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>org.helios.apmrouter.server.ServerComponentBean</code></p>
  */
-@ManagedResource
+//@ManagedResource
 @EnableAutoConfiguration
 @Component
 public abstract class ServerComponentBean extends ServerComponent implements 
@@ -82,7 +82,7 @@ public abstract class ServerComponentBean extends ServerComponent implements
 		SelfNaming,
 		InitializingBean,
 		NotificationPublisherAware,
-		ServerComponentBeanMXBean,
+//		ServerComponentBeanMXBean,
 		DisposableBean {
 
 
