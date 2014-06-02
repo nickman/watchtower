@@ -50,6 +50,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.heliosapm.watchtower.core.CollectionExecutor;
 import com.heliosapm.watchtower.core.CollectionScheduler;
 import com.heliosapm.watchtower.core.EventExecutor;
+import com.heliosapm.watchtower.groovy.GroovyService;
 import com.heliosapm.watchtower.jmx.server.JMXMPServer;
 
 /**
@@ -91,6 +92,7 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	
 	public Watchtower() {
 		LOG = LoggerFactory.getLogger(Watchtower.class);
+		GroovyService.getInstance();
 	}
 	
 	@RequestMapping("/")	
@@ -108,12 +110,14 @@ public class Watchtower extends TextWebSocketHandler implements ApplicationConte
 	 */
 	public static void main(String[] args) {
 		WatchtowerApplication wapp = new WatchtowerApplication(Watchtower.class);
+		wapp.setHeadless(false);
 		boolean webEnabled = true;
 		if(args!=null && args.length>0) {
 			if(Arrays.binarySearch(args, NO_WEB_CL) >= 0) {
 				webEnabled = false;
 			}
 		}
+		
 		wapp.setWebEnvironment(webEnabled);
 		wapp.run(args);
 		LOG = LoggerFactory.getLogger(Watchtower.class);

@@ -24,8 +24,13 @@
  */
 package com.heliosapm.watchtower.deployer;
 
+import groovy.lang.GroovyClassLoader;
+
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileFilter;
+import java.io.FileInputStream;
+import java.io.FilenameFilter;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -33,13 +38,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Properties;
 
+import javax.management.ObjectName;
+
+import org.codehaus.groovy.control.CompilerConfiguration;
 import org.helios.jmx.opentypes.otenabled.OpenTypeEnabledURLClassLoader;
 import org.helios.jmx.util.helpers.StringHelper;
+import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.config.ConstructorArgumentValues;
@@ -48,9 +56,7 @@ import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.support.GenericGroovyApplicationContext;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.FileSystemResource;
 
 import com.heliosapm.watchtower.Watchtower;
 import com.heliosapm.watchtower.WatchtowerApplication;
@@ -96,20 +102,63 @@ public class SubContextBoot {
 				" http://www.springframework.org/schema/context" + 
 				" http://www.springframework.org/schema/context/spring-context.xsd\">" + 
 				" <context:annotation-config/><context:mbean-export/> " + 
-				"<bean class=\"com.heliosapm.watchtower.deployer.DeploymentBranch\"/>" + 		
+				"<bean name=\"%s\" class=\"com.heliosapm.watchtower.deployer.DeploymentBranch\"/>" + 		
 				"</beans>";
 	
+	/** Groovy file filter */
+	protected static final FilenameFilter GROOVY_FILENAME_FILTER = new FilenameFilter() {
+		/**
+		 * {@inheritDoc}
+		 * @see java.io.FilenameFilter#accept(java.io.File, java.lang.String)
+		 */
+		@Override
+		public boolean accept(File dir, String name) {
+			if(name.toLowerCase().endsWith(".groovy")) return true;
+			return false;
+		}
+//		@Override
+//		public boolean accept(File pathname) {
+//			if(pathname!=null && pathname.isFile() && pathname.toString().toLowerCase().endsWith(".groovy")) return true;
+//			return false;
+//		}
+	};
+
 	
-	public static void main(final File subDeploy, ConfigurableApplicationContext parent) {
+	public static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch) {
+		main(subDeploy, parent, parentBranch, null);
+	}
+	
+	public static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch, ObjectName objectName) {
 		ClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 		Map<String, Object> env = new HashMap<String, Object>();
+		String[] args = subDeploy.list(GROOVY_FILENAME_FILTER);
+		for(int i = 0; i < args.length; i++) {
+			args[i] = subDeploy.getAbsolutePath() + File.separator + args[i];
+		}
+		CompilerConfiguration cc = new CompilerConfiguration(CompilerConfiguration.DEFAULT);
+		File compilerConfig = new File(subDeploy, "groovy.properties");
+		if(compilerConfig.canRead()) {
+			Properties configuration = new Properties();
+			try {
+				configuration.load(new ByteArrayInputStream(URLHelper.getBytesFromURL(URLHelper.toURL(compilerConfig))));
+				LOG.info("Loaded Groovy Compiler Options from [{}]", compilerConfig.getAbsolutePath());
+			}  catch (Exception ex) {
+				ex.printStackTrace(System.err);
+			}			
+		}		
+		GroovyClassLoader gcl = new GroovyClassLoader(branchClassLoader, cc);
 		env.put("branch-file", subDeploy);
 		env.put("branch-cl", branchClassLoader);
+		env.put("branch-parent", parentBranch);
+		env.put("groovy-classloader", gcl);
+		if(objectName!=null) {
+			env.put("parentObjectName", objectName);
+		}
 		ConfigurableApplicationContext branchCtx = null;
 		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
 		try {
 			Thread.currentThread().setContextClassLoader(branchClassLoader);	
-			ByteArrayResource subContextXml = new ByteArrayResource(DEPLOYMENT_BRANCH.getBytes()) {
+			ByteArrayResource subContextXml = new ByteArrayResource(String.format(DEPLOYMENT_BRANCH, subDeploy.getAbsolutePath()).getBytes()) {
 				/**
 				 * {@inheritDoc}
 				 * @see org.springframework.core.io.AbstractResource#getFilename()
@@ -119,7 +168,15 @@ public class SubContextBoot {
 					return "DeploymentBranch-" + subDeploy + ".xml"; 
 				}
 			};
-			WatchtowerApplication wapp = new WatchtowerApplication(subContextXml);
+			Object[] apps = new Object[args.length + 1];
+			apps[0] = subContextXml;
+			for(int i = 0; i < args.length; i++) {
+				long start = System.currentTimeMillis();
+				File gFile = new File(args[i]);
+				apps[i+1] = gcl.parseClass(gFile);
+				LOG.info("Compiled Groovy Script [{}] in [{}] ms", gFile.getName(), System.currentTimeMillis()-start);
+			}
+			WatchtowerApplication wapp = new WatchtowerApplication(apps);
 			ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
 			wapp.addInitializers(parentSetter);
 	
@@ -127,8 +184,11 @@ public class SubContextBoot {
 			wapp.setShowBanner(false);
 			wapp.setWebEnvironment(false);
 			branchCtx = wapp.run();
-			branchCtx.setId("SubDeploy-[" + subDeploy + "]");
-			
+//			DefaultListableBeanFactory beanFactory = (DefaultListableBeanFactory) branchCtx.getBeanFactory();
+//			beanFactory.registerBeanDefinition(subDeploy + "ObjectName", BeanDefinitionBuilder.genericBeanDefinition(ObjectName.class).addConstructorArgValue(
+//					branchCtx.getBeansOfType(DeploymentBranch.class).values().iterator().next().getObjectName().toString()
+//			).getBeanDefinition());
+			branchCtx.setId("SubDeploy-[" + subDeploy + "]");			
 			
 		} catch (Exception ex) {
 			LOG.error("Failed to deploy Branch for [" + subDeploy + "]", ex);

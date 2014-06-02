@@ -65,7 +65,7 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 * To be overriden by concrete classes where applicable.
 	 */
 	protected void preStart() {
-		
+		/* No Op */
 	}
 	
 	/**
@@ -73,7 +73,7 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 * To be overriden by concrete classes where applicable.
 	 */
 	protected void postStart() {
-		
+		/* No Op */
 	}
 	
 
@@ -83,9 +83,30 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 */
 	@Override
 	public void stop() {
-		// TODO Auto-generated method stub
+		info("Stopping");
+		preStop();
+		
+		
+		postStop();
 
 	}
+	
+	/**
+	 * Called before the main {@link #stop()} method body.
+	 * To be overriden by concrete classes where applicable.
+	 */
+	protected void preStop() {
+		/* No Op */
+	}
+	
+	/**
+	 * Called after the main {@link #stop()} method body.
+	 * To be overriden by concrete classes where applicable.
+	 */
+	protected void postStop() {
+		/* No Op */
+	}
+		
 
 	/**
 	 * {@inheritDoc}
@@ -93,8 +114,7 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 */
 	@Override
 	public void pause() {
-		// TODO Auto-generated method stub
-
+		/* No Op */
 	}
 
 	/**
@@ -103,8 +123,7 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 */
 	@Override
 	public void init() {
-		// TODO Auto-generated method stub
-
+		/* No Op */
 	}
 
 	/**
@@ -113,8 +132,7 @@ public abstract class BaseCollector extends StdServerComponent implements BaseCo
 	 */
 	@Override
 	public void collect(Object... collectArgs) {
-		// TODO Auto-generated method stub
-
+		/* No Op */
 	}
 
 	/**

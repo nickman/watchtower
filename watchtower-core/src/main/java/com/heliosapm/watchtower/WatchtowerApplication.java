@@ -47,6 +47,7 @@ public class WatchtowerApplication extends SpringApplication {
 	 */
 	public WatchtowerApplication(Object... sources) {
 		super(sources);
+		setHeadless(false);
 		// TODO Auto-generated constructor stub
 	}
 
@@ -57,6 +58,7 @@ public class WatchtowerApplication extends SpringApplication {
 	 */
 	public WatchtowerApplication(ResourceLoader resourceLoader, Object... sources) {
 		super(resourceLoader, sources);
+		setHeadless(false);
 		// TODO Auto-generated constructor stub
 	}
 

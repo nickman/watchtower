@@ -151,7 +151,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 		this.applicationContext.getAutowireCapableBeanFactory().autowireBean(this);
 		for(Path path: deploymentRoots) {
 			//enqueueFileEvent(0, new FileEvent(path.toAbsolutePath().toFile().getAbsolutePath(), ENTRY_CREATE, this));
-			SubContextBoot.main(path.toAbsolutePath().toFile(), applicationContext);
+			SubContextBoot.main(path.toAbsolutePath().toFile(), applicationContext, null, null);
 		}
 		log.info(StringHelper.banner("DeploymentWatchService Started"));
 		started.set(true);
@@ -466,9 +466,10 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	 */
 	protected void enqueueFileEvent(long delay, FileEvent fe) {
 		int removes = 0;
+		Kind<Path> eventType =  null;
 		while(processingQueue.remove(fe)) {removes++;}
 		if(delay==-1L) {
-			Kind<Path> eventType = fe.getEventType();
+			eventType = fe.getEventType();
 			if(eventType==ENTRY_DELETE) {
 				fe.addDelay(0);
 			} else if(eventType==ENTRY_MODIFY) {
@@ -478,7 +479,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 			}
 		}
 		processingQueue.add(fe);
-		log.info("Queued File Event for [{}] and dropped [{}] older versions", fe.getFileName(), removes);
+		log.info("Queued File [{}] Event for [{}] and dropped [{}] older versions", eventType.name(), fe.getFileName(), removes);
 	}
 	
 	/**
@@ -580,7 +581,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 	public void onDirectoryCreated(File dir) {
 		if(!started.get()) return;
 		log.info("----> Directory Created [{}]", dir);
-		SubContextBoot.main(dir, this.applicationContext);
+		SubContextBoot.main(dir, this.applicationContext, null, null);
 		
 	}
 
