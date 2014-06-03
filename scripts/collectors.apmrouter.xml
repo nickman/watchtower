@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xmlns:jee="http://www.springframework.org/schema/jee"
+   xmlns:p="http://www.springframework.org/schema/p"
+   xmlns:c="http://www.springframework.org/schema/c"
+   xmlns:context="http://www.springframework.org/schema/context"
+   xsi:schemaLocation="http://www.springframework.org/schema/beans
+                          http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+                          http://www.springframework.org/schema/jee
+                       http://www.springframework.org/schema/jee/spring-jee-3.1.xsd
+                       http://www.springframework.org/schema/util
+                       http://www.springframework.org/schema/util/spring-util-3.1.xsd
+                       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:annotation-config/>
+    <context:mbean-export registration="ignoreExisting" />
+    
+    
+
+	<bean
+	    class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+	    <description>Property to be used as class identifier for org.helios.collector.jmx.tracers.JMXAttributeTrace</description>
+	    <property name="properties">
+		<props>
+		    <prop key="class_Trace">org.helios.collector.jmx.tracers.JMXAttributeTrace</prop>
+		</props>
+	    </property>
+	</bean>
+	
+	  <bean id="JBoss4Connector" class="org.helios.collector.jmx.connection.JNDIMBeanServerConnectionFactory">
+     <constructor-arg type="java.util.Properties">
+         <props>
+             <prop key="java.naming.factory.initial">org.jnp.interfaces.NamingContextFactory</prop>
+             <prop key="java.naming.provider.url">localhost:1099</prop>
+             <prop key="jndi.name">jmx/invoker/RMIAdaptor</prop>
+         </props>
+     </constructor-arg>
+     	<property name="serverIdentifierClassName" value="JBossMBeanServerIdentifier"/>
+    </bean>
+
+
+    <bean id="ECS_Collector" class="org.helios.collector.jmx.JMXCollector"
+        c:_0-ref="JBoss4Connector"
+        p:tracingNameSpace="app=ECS"
+        p:logErrors="true"
+        p:logCollectionResult="true" >
+     	<property name="virtualHost" value="nwhitehe"/>
+     	<property name="virtualAgent" value="ECS"/>
+        
+        <property name="jmxObjects">
+            <list>
+                <ref bean="Arjuna" />
+                <ref bean="MQSeriesTopics" />                
+                <ref bean="JBossQueues" />                
+                <ref bean="ISGQueues" />
+                <ref bean="JBossTopics" />                
+                <ref bean="DataSources" />
+                <ref bean="ThreadNMemoryActivity" />
+                <ref bean="ServerSessionPools" />
+                <ref bean="EntityCaches" />
+                <ref bean="TXLockInterceptors" />
+                <ref bean="MDBs" />
+                <!-- <ref bean="HotspotMemory" /> -->
+            </list>
+        </property>
+    </bean>
+
+    <bean name="Arjuna" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="arjuna.tx:service=PerformanceStatistics"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:segmentPrefixElements="platform=jboss,service=TXManager" p:targetAttributeName="NumberOfCommittedTransactions" p:metricName="CommittedTransactions" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:segmentPrefixElements="platform=jboss,service=TXManager" p:targetAttributeName="NumberOfAbortedTransactions" p:metricName="AbortedTransactions" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:segmentPrefixElements="platform=jboss,service=TXManager" p:targetAttributeName="NumberOfTransactions" p:metricName="Transactions" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:segmentPrefixElements="platform=jboss,service=TXManager" p:targetAttributeName="NumberOfHeuristics" p:metricName="Heuristics" p:traceType="DELTA_COUNTER" />
+            </list>
+        </property>
+    </bean>
+
+    <bean name="MQSeriesTopics" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ecs.jms.destinations:service=wmq,type=Topic,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+            	<bean class="${class_Trace}" p:targetAttributeName="MessagesRejected" p:segmentPrefixElements="platform=jboss,service=WMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="CurrentSubscriberCount" p:segmentPrefixElements="platform=jboss,service=WMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="DeliveredMesageCount" p:segmentPrefixElements="platform=jboss,service=WMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean name="JBossQueues" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ecs.jms.destinations:service=jboss,type=Queue,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+            	<bean class="${class_Trace}" p:targetAttributeName="MessageCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="DeliveringCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="ConsumerCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            </list>
+        </property>
+    </bean>
+    
+    <bean name="ISGQueues" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ecs.jms.destinations:service=isg,type=Queue,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+            	<bean class="${class_Trace}" p:targetAttributeName="QueueDepth" p:segmentPrefixElements="platform=jboss,service=ISGMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="OpenOutputCount" p:segmentPrefixElements="platform=jboss,service=ISGMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="OpenInputCount" p:segmentPrefixElements="platform=jboss,service=ISGMQ,type=Queues" p:segment="name={TARGET-PROPERTY:name}"/>
+            </list>
+        </property>
+    </bean>
+    
+
+    <bean name="JBossTopics" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ecs.jms.destinations:service=jboss,type=Topic,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+            	<bean class="${class_Trace}" p:targetAttributeName="MessageCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="DeliveringCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}"/>
+            	<bean class="${class_Trace}" p:targetAttributeName="ConsumerCount" p:segmentPrefixElements="platform=jboss,service=JBossMQ,type=Topics" p:segment="name={TARGET-PROPERTY:name}"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean name="ThreadNMemoryActivity" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="jboss.system:type=ServerInfo"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="ActiveThreadCount" p:segmentPrefixElements="platform=jboss,service=JVM,resource=Threads" />
+                <bean class="${class_Trace}" p:targetAttributeName="ActiveThreadGroupCount" p:segmentPrefixElements="platform=jboss,service=JVM,resource=Threads" />
+                <bean class="${class_Trace}" p:targetAttributeName="MaxMemory" p:segmentPrefixElements="platform=jboss,service=JVM,resource=Memory" />
+                <bean class="${class_Trace}" p:targetAttributeName="TotalMemory" p:segmentPrefixElements="platform=jboss,service=JVM,resource=Memory" />
+                <bean class="${class_Trace}" p:targetAttributeName="FreeMemory" p:segmentPrefixElements="platform=jboss,service=JVM,resource=Memory" />
+            </list>
+        </property>
+    </bean>
+
+
+    <bean id="DataSources" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="jboss.jca:service=ManagedConnectionPool,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="ConnectionCount" p:segmentPrefixElements="platform=jboss,service=JCA,resource=DataSources" p:segment="name={TARGET-PROPERTY:name}" p:metricName="ActiveConnection" />
+                <bean class="${class_Trace}" p:targetAttributeName="InUseConnectionCount" p:segmentPrefixElements="platform=jboss,service=JCA,resource=DataSources" p:segment="name={TARGET-PROPERTY:name}" p:metricName="In-useConnection" />
+                <bean class="${class_Trace}" p:targetAttributeName="ConnectionCreatedCount" p:segmentPrefixElements="platform=jboss,service=JCA,resource=DataSources" p:segment="name={TARGET-PROPERTY:name}" p:metricName="TotalCreated" />
+                <bean class="${class_Trace}" p:targetAttributeName="ConnectionDestroyedCount" p:segmentPrefixElements="platform=jboss,service=JCA,resource=DataSources" p:segment="name={TARGET-PROPERTY:name}" p:metricName="TotalDestroyed" />
+                <bean class="${class_Trace}" p:targetAttributeName="MaxSize" p:segmentPrefixElements="platform=jboss,service=JCA,resource=DataSources" p:segment="name={TARGET-PROPERTY:name}" p:metricName="MaximumAvailable" />
+            </list>
+        </property>
+    </bean>
+
+
+
+    <!--  ********  jgroups.jar is required in your classpath by this bean **********-->
+    <!--
+    <bean name="TomcatClusterActivity" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="jboss.cache:service=TomcatClusteringCache"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="NumberOfNodes" p:segmentPrefixElements="TomcatCluster" />
+                <bean class="${class_Trace}" p:targetAttributeName="NumberOfAttributes" p:segmentPrefixElements="TomcatCluster" />
+                <bean class="${class_Trace}" p:targetAttributeName="Members" p:segmentPrefixElements="TomcatCluster" >
+                    <property name="objectFormatters">
+						<list>
+							<ref bean="CollectionSizer"/>
+						</list>
+					</property>
+				</bean>
+            </list>
+        </property>
+    </bean>
+	-->
+	
+	
+    <bean id="CollectionSizer" class="org.helios.collector.jmx.tracers.CollectionSizeFormatter"/>
+    
+    <!-- <bean id="ManagementCounterTracer" class="org.helios.collector.jmx.tracers.ManagementCounterTracer"/> 
+    
+    <bean id="HotspotMemory" class="org.helios.collector.jmx.tracers.JMXObject">
+			<property name="targetObjectName" value="sun.management:type=HotspotMemory"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="InternalMemoryCounters" p:segmentPrefixElements="platform=jboss,service=JVM" p:segment="resource=MemoryCounters" >
+                	<property name="objectTracers">
+										<list>
+											<ref bean="ManagementCounterTracer"/>
+										</list>
+                	</property> 
+                </bean>
+						</list>			
+				</property>
+		</bean> --> 
+		
+		
+    <bean id="ServerSessionPools" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ecs.mqseries:service=ServerSessionPool,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="CreatedSessions" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="DestroyedSessions" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="CommitCount" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="ReconnectFailures" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="SessionsInUse" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="MessagesSent" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="RollbackCount" p:segmentPrefixElements="platform=jboss,service=JMS,resource=ServerSessionPools" p:segment="name={TARGET-PROPERTY:name}" />
+            </list>
+        </property>
+    </bean>
+    
+    <bean id="EntityCaches" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ice.ecs.cache:service=SoftReferenceCache,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="Size" p:segmentPrefixElements="platform=jboss,service=SoftReferenceCache" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="HitRatio" p:segmentPrefixElements="platform=jboss,service=SoftReferenceCache" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="MissCount" p:segmentPrefixElements="platform=jboss,service=SoftReferenceCache" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="HitCount" p:segmentPrefixElements="platform=jboss,service=SoftReferenceCache" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="Evictions" p:segmentPrefixElements="platform=jboss,service=SoftReferenceCache" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+            </list>
+        </property>
+    </bean>
+    
+    <bean id="TXLockInterceptors" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="com.ice.ecs.entity:service=ExclusiveLockInterceptor,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="Invalidations" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="LockCount" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />
+                <bean class="${class_Trace}" p:targetAttributeName="ThreadsHoldingLocksCount" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />
+                <bean class="${class_Trace}" p:targetAttributeName="CachedPojoCount" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />
+                <bean class="${class_Trace}" p:targetAttributeName="ActiveLocks" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />
+                <bean class="${class_Trace}" p:targetAttributeName="Revalidations" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" p:traceType="DELTA_COUNTER" />
+                
+								<bean class="${class_Trace}" p:targetAttributeName="RevalidationFailures" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}"  p:traceType="DELTA_COUNTER" />                
+								<bean class="${class_Trace}" p:targetAttributeName="WaitingThreadCount" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+								<bean class="${class_Trace}" p:targetAttributeName="ValidatorReleases" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" p:traceType="DELTA_COUNTER" />                
+
+
+								<bean class="${class_Trace}" p:targetAttributeName="AvgLockHeldTimeMs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+								<bean class="${class_Trace}" p:targetAttributeName="MaxLockHeldTimeMs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+								<bean class="${class_Trace}" p:targetAttributeName="MinLockHeldTimeMs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+
+								<bean class="${class_Trace}" p:targetAttributeName="AvgLockTimeNs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+								<bean class="${class_Trace}" p:targetAttributeName="MaxLockTimeNs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+								<bean class="${class_Trace}" p:targetAttributeName="MinLockTimeNs" p:segmentPrefixElements="platform=jboss,service=TXLockInterceptors" p:segment="class={TARGET-PROPERTY:class}" />                
+
+								
+            </list>
+        </property>
+    </bean>
+    
+    <bean id="MDBs" class="org.helios.collector.jmx.tracers.JMXObject">
+        <property name="targetObjectName" value="ice.ecs.jms.mdb:service=MDBManager,*"/>
+        <property name="targetAttributeTraces">
+            <list>
+                <bean class="${class_Trace}" p:targetAttributeName="RolledBackTransactions" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="ProcessedMessages" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="DroppedMessages" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="Concurrency" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="ReceivedMessages" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                
+                <bean class="${class_Trace}" p:targetAttributeName="RejectedMessages" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="CommittedTransactions" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="InstanceCount" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="TotalProcessingTime" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" />
+                <bean class="${class_Trace}" p:targetAttributeName="TotalProcessingTime" p:metricName="TotalProcessingRate" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" p:traceType="DELTA_COUNTER" />
+                <bean class="${class_Trace}" p:targetAttributeName="AverageProcessingTime" p:segmentPrefixElements="platform=jboss,service=JMS,resource=MDB" p:segment="name={TARGET-PROPERTY:name}" />
+                
+            </list>
+        </property>
+    </bean>
+
+</beans>
