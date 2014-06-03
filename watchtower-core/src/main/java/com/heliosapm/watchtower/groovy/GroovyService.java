@@ -16,15 +16,14 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,11 +38,6 @@ import org.helios.jmx.util.helpers.SystemClock;
 import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationContext;
-import org.springframework.core.env.EnvironmentCapable;
-
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 
 /**
  * <p>Title: GroovyService</p>
@@ -61,6 +55,8 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 	/** A map of compiled scripts keyed by an arbitrary reference name */
 	protected final Map<String, Script> compiledScripts = new ConcurrentHashMap<String, Script>();
 	
+	/** The bean finder instance */
+	protected final GroovyBeanFinder beanFinder;
 	
 	
 	/** The instance logger */
@@ -122,6 +118,7 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 		compilerConfiguration.setOptimizationOptions(Collections.singletonMap("indy", true));
 		groovyClassLoader =  new GroovyClassLoader(getClass().getClassLoader(), compilerConfiguration);
 		registerLoadListener(this);
+		beanFinder = GroovyBeanFinder.getInstance();
 		if(JMXHelper.getHeliosMBeanServer().isRegistered(objectName)) {
 			try { JMXHelper.getHeliosMBeanServer().unregisterMBean(objectName); } catch (Exception ex) {/* No Op */}
 		}
@@ -150,6 +147,18 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 	 * @param imps  The imports to add
 	 */
 	protected void applyImports(ImportCustomizer impCustomizer, String...imps) {		
+		imports(impCustomizer, imps);
+		compilerConfiguration.addCompilationCustomizers(impCustomizer);
+	}
+	
+	/**
+	 * Adds the passed import statements to the passed import customizer, creating the customizer if it is null
+	 * @param impCustomizer The optionally null import customizer
+	 * @param imps The import statements
+	 * @return The [re-]configured import customizer
+	 */
+	public ImportCustomizer imports(ImportCustomizer impCustomizer, String...imps) {
+		if(impCustomizer==null) impCustomizer = new ImportCustomizer();
 		for(String imp: imps) {
 			String _imp = imp.trim().replaceAll("\\s+", " ");
 			if(!_imp.startsWith("import")) {
@@ -176,7 +185,19 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 				}
 			}
 		}
-		compilerConfiguration.addCompilationCustomizers(impCustomizer);
+		return impCustomizer;
+	}
+	
+	/**
+	 * Adds the passed import statements to the passed import customizer, creating the customizer if it is null
+	 * @param impCustomizer The optionally null import customizer
+	 * @param imps The import statements
+	 * @return The [re-]configured import customizer
+	 */
+	public ImportCustomizer imports(ImportCustomizer impCustomizer, Collection<String> imps) {
+		if(impCustomizer==null) impCustomizer = new ImportCustomizer();
+		if(imps!=null && !imps.isEmpty()) return imports(impCustomizer, imps.toArray(new String[0]));
+		return impCustomizer;
 	}
 	
 	/**
@@ -566,7 +587,7 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 					beans.put("jmxserver", JMXHelper.getHeliosMBeanServer());
 					beans.put("jmxhelper", JMXHelper.class);									
 					beans.put("sysclock", SystemClock.class);
-					beans.put("beanfinder", BEAN_FINDER);
+					beans.put("beanfinder", beanFinder);
 					
 					
 //					for(String beanName: applicationContext.getBeanDefinitionNames()) {
@@ -582,33 +603,8 @@ public class GroovyService implements GroovyLoadedScriptListener, GroovyServiceM
 		return new Binding(beans);
 	}
 	
-	private static class GroovyBeanFinder {
-		private static Cache<String, Object> beanCache = CacheBuilder.newBuilder().concurrencyLevel(8).initialCapacity(128).weakValues().build();
-		
-		public static Object bean(final CharSequence on, final CharSequence beanName) throws ExecutionException {
-			final String key = on.toString() + "/" + beanName.toString();
-			return beanCache.get(key, new Callable<Object>(){
-				@Override
-				public Object call() throws Exception {
-					ApplicationContext ctx = (ApplicationContext)JMXHelper.getAttribute(JMXHelper.objectName(on), "Context");					
-					return ctx.getBean(beanName.toString());
-				}
-			});
-		}
-		public static Object env(final CharSequence on, final CharSequence beanName) throws ExecutionException {
-			final String key = on.toString() + "/" + beanName.toString();
-			return beanCache.get(key, new Callable<Object>(){
-				@Override
-				public Object call() throws Exception {
-					EnvironmentCapable ctx = (EnvironmentCapable)JMXHelper.getAttribute(JMXHelper.objectName(on), "Context");
-					return ctx.getEnvironment().getProperty(beanName.toString());
-				}
-			});
-		}
-		
-	}
 	
-	private static final GroovyBeanFinder BEAN_FINDER = new GroovyBeanFinder();  
+	  
 
 	/**
 	 * {@inheritDoc}

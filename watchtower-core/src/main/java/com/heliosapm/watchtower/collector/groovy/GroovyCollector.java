@@ -24,6 +24,10 @@
  */
 package com.heliosapm.watchtower.collector.groovy;
 
+import org.codehaus.groovy.runtime.DefaultGroovyMethods;
+
+import groovy.lang.GroovyObject;
+
 import com.heliosapm.watchtower.collector.BaseCollector;
 
 /**
@@ -35,12 +39,33 @@ import com.heliosapm.watchtower.collector.BaseCollector;
  */
 
 public class GroovyCollector extends BaseCollector {
-
+	/** The wrapped groovy object */
+	protected GroovyObject groovyObject = null;
+	
 	/**
 	 * Creates a new GroovyCollector
 	 */
 	public GroovyCollector() {
-		super();
+		
+	}
+	
+	/**
+	 * Sets the delegate groovy object
+	 * @param groovyObject The wrapped groovy object
+	 * @return this groovy collector
+	 */
+	public GroovyCollector setGroovyObject(GroovyObject groovyObject) {
+		this.groovyObject = groovyObject;
+		return this;
+	}
+	
+	/**
+	 * Groovy coerces the wrapped groovy object to the passed type
+	 * @param type the type to coerce to
+	 * @return the groovy object coerced to the given type
+	 */
+	public <T> T as(Class<T> type) {
+		return DefaultGroovyMethods.asType(groovyObject, type);
 	}
 
 }

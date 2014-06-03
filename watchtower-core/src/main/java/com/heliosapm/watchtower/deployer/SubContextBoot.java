@@ -28,19 +28,21 @@ import groovy.lang.GroovyClassLoader;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FilenameFilter;
-import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import javax.management.ObjectName;
 
@@ -60,6 +62,9 @@ import org.springframework.core.io.ByteArrayResource;
 
 import com.heliosapm.watchtower.Watchtower;
 import com.heliosapm.watchtower.WatchtowerApplication;
+import com.heliosapm.watchtower.collector.groovy.GroovyCollector;
+import com.heliosapm.watchtower.groovy.GroovyService;
+import com.heliosapm.watchtower.groovy.SuperClassOverlay;
 
 /**
  * <p>Title: SubContextBoot</p>
@@ -128,6 +133,20 @@ public class SubContextBoot {
 		main(subDeploy, parent, parentBranch, null);
 	}
 	
+	/** The default imports */
+	public static final Set<String> DEFAULT_IMPORTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+			"import groovy.transform.*"
+	)));
+	
+	protected static final SuperClassOverlay SUPERCLASS_OVERLAY = new SuperClassOverlay(GroovyCollector.class);
+	
+	/**
+	 * Builds a sub-deployment
+	 * @param subDeploy The sub deployment directory
+	 * @param parent The parent application context
+	 * @param parentBranch The optional parent deployment branch
+	 * @param objectName The optional parent ObjectName
+	 */
 	public static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch, ObjectName objectName) {
 		ClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 		Map<String, Object> env = new HashMap<String, Object>();
@@ -146,6 +165,7 @@ public class SubContextBoot {
 				ex.printStackTrace(System.err);
 			}			
 		}		
+		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY);		
 		GroovyClassLoader gcl = new GroovyClassLoader(branchClassLoader, cc);
 		env.put("branch-file", subDeploy);
 		env.put("branch-cl", branchClassLoader);
