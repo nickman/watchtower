@@ -24,12 +24,23 @@
  */
 package com.heliosapm.watchtower;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.io.ResourceLoader;
+
+import com.heliosapm.watchtower.deployer.BeanDefinitionResource;
 
 /**
  * <p>Title: WatchtowerApplication</p>
@@ -61,6 +72,65 @@ public class WatchtowerApplication extends SpringApplication {
 		setHeadless(false);
 		// TODO Auto-generated constructor stub
 	}
+	
+	public void addSources(Object...source) {
+		Set<Object> set = new HashSet<Object>(source.length);
+		Collections.addAll(set, source);
+		setSources(set);
+		
+	}
+
+	/**
+	 * Load beans into the application context.
+	 * @param context the context to load beans into
+	 * @param sources the sources to load
+	 */
+	protected void load(ApplicationContext context, Object[] sources) {
+//		BeanDefinitionLoader loader = createBeanDefinitionLoader(
+//				getBeanDefinitionRegistry(context), sources);
+//		if (this.beanNameGenerator != null) {
+//			loader.setBeanNameGenerator(this.beanNameGenerator);
+//		}
+//		if (this.resourceLoader != null) {
+//			loader.setResourceLoader(this.resourceLoader);
+//		}
+//		if (this.environment != null) {
+//			loader.setEnvironment(this.environment);
+//		}
+//		loader.load();
+		BeanDefinitionRegistry registry = getBeanDefinitionRegistry(context);
+		List<Object> nonSupported = new ArrayList<Object>();
+		for(Object o: sources) {
+			if(o==null) continue;
+			if(o instanceof BeanDefinitionResource) {
+				BeanDefinitionResource bdr = (BeanDefinitionResource)o;
+				BeanDefinition beanDefinition = bdr.getBeanDefinition(); 
+				registry.registerBeanDefinition(bdr.getBeanName(), beanDefinition);
+			} else {
+				nonSupported.add(o);
+			}
+			
+		}
+		if(!nonSupported.isEmpty()) {
+			super.load(context, nonSupported.toArray(new Object[0]));
+		}
+	}
+	
+	/**
+	 * @param context the application context
+	 * @return the BeanDefinitionRegistry if it can be determined
+	 */
+	private BeanDefinitionRegistry getBeanDefinitionRegistry(ApplicationContext context) {
+		if (context instanceof BeanDefinitionRegistry) {
+			return (BeanDefinitionRegistry) context;
+		}
+		if (context instanceof AbstractApplicationContext) {
+			return (BeanDefinitionRegistry) ((AbstractApplicationContext) context)
+					.getBeanFactory();
+		}
+		throw new IllegalStateException("Could not locate BeanDefinitionRegistry");
+	}
+	
 
 	
 	/**
@@ -79,7 +149,7 @@ public class WatchtowerApplication extends SpringApplication {
 	 * @return the application context (not yet refreshed)
 	 * @see #setApplicationContextClass(Class)
 	 */
-	protected ConfigurableApplicationContext createApplicationContext() {
+	public ConfigurableApplicationContext createApplicationContext() {
 		ConfigurableApplicationContext appCtx = super.createApplicationContext();
 		if(parent!=null) {
 			appCtx.setEnvironment((ConfigurableEnvironment) parent.getEnvironment());
@@ -88,6 +158,12 @@ public class WatchtowerApplication extends SpringApplication {
 			this.addInitializers(pinit);
 		}
 		return appCtx;
+	}
+	
+	@Override
+	protected void refresh(ApplicationContext applicationContext) {
+		// TODO Auto-generated method stub
+		super.refresh(applicationContext);
 	}
 
 	/**

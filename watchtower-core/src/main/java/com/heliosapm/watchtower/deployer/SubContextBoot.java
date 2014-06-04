@@ -52,7 +52,10 @@ import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConstructorArgumentValues;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.GenericBeanDefinition;
 import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
@@ -62,8 +65,9 @@ import org.springframework.core.io.ByteArrayResource;
 
 import com.heliosapm.watchtower.Watchtower;
 import com.heliosapm.watchtower.WatchtowerApplication;
-import com.heliosapm.watchtower.collector.groovy.GroovyCollector;
+import com.heliosapm.watchtower.core.impl.ServiceAspectImpl;
 import com.heliosapm.watchtower.groovy.GroovyService;
+import com.heliosapm.watchtower.groovy.ServiceAspectCompiler;
 import com.heliosapm.watchtower.groovy.SuperClassOverlay;
 
 /**
@@ -139,7 +143,7 @@ public class SubContextBoot {
 			"import com.heliosapm.watchtower.groovy.annotation.*"
 	)));
 	
-	protected static final SuperClassOverlay SUPERCLASS_OVERLAY = new SuperClassOverlay(GroovyCollector.class);
+	protected static final SuperClassOverlay SUPERCLASS_OVERLAY = new SuperClassOverlay(ServiceAspectImpl.class);
 	
 	/**
 	 * Builds a sub-deployment
@@ -149,7 +153,7 @@ public class SubContextBoot {
 	 * @param objectName The optional parent ObjectName
 	 */
 	public static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch, ObjectName objectName) {
-		ClassLoader branchClassLoader = loadBranchLibs(subDeploy);
+		OpenTypeEnabledURLClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 		Map<String, Object> env = new HashMap<String, Object>();
 		String[] args = subDeploy.list(GROOVY_FILENAME_FILTER);
 		for(int i = 0; i < args.length; i++) {
@@ -166,8 +170,9 @@ public class SubContextBoot {
 				ex.printStackTrace(System.err);
 			}			
 		}		
-		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY);		
+		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY, ServiceAspectCompiler.Instance);		
 		GroovyClassLoader gcl = new GroovyClassLoader(branchClassLoader, cc);
+		
 		env.put("branch-file", subDeploy);
 		env.put("branch-cl", branchClassLoader);
 		env.put("branch-parent", parentBranch);
@@ -175,6 +180,9 @@ public class SubContextBoot {
 		if(objectName!=null) {
 			env.put("parentObjectName", objectName);
 		}
+		WatchtowerApplication wapp = null;
+		ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
+		
 		ConfigurableApplicationContext branchCtx = null;
 		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
 		try {
@@ -189,27 +197,39 @@ public class SubContextBoot {
 					return "DeploymentBranch-" + subDeploy + ".xml"; 
 				}
 			};
-			Object[] apps = new Object[args.length + 1];
-			apps[0] = subContextXml;
-			for(int i = 0; i < args.length; i++) {
-				long start = System.currentTimeMillis();
-				File gFile = new File(args[i]);
-				apps[i+1] = gcl.parseClass(gFile);
-				LOG.info("Compiled Groovy Script [{}] in [{}] ms", gFile.getName(), System.currentTimeMillis()-start);
-			}
-			WatchtowerApplication wapp = new WatchtowerApplication(apps);
-			ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
+			wapp = new WatchtowerApplication(subContextXml);
 			wapp.addInitializers(parentSetter);
-	
 			wapp.setDefaultProperties(env);
 			wapp.setShowBanner(false);
 			wapp.setWebEnvironment(false);
+			branchCtx = wapp.createApplicationContext();
+			
+			
+			
+			DefaultListableBeanFactory beanFactory = (DefaultListableBeanFactory) branchCtx.getBeanFactory();
+			for(int i = 0; i < args.length; i++) {
+				long start = System.currentTimeMillis();
+				File gFile = new File(args[i]);
+				Class<?> gclass = gcl.parseClass(gFile);
+				wapp.addSources(new BeanDefinitionResource(BeanDefinitionBuilder.genericBeanDefinition(gclass)
+						.addPropertyValue("parent", parentBranch)
+						.addPropertyValue("sourceFile", gFile)
+//						.addConstructorArgValue(parentBranch)
+//						.addConstructorArgValue(gFile)
+						.getBeanDefinition(), 
+					gFile.getAbsoluteFile(), gclass.getName()));
+				//beanFactory.registerBeanDefinition(gclass.getName(), BeanDefinitionBuilder.rootBeanDefinition(gclass).getBeanDefinition());
+				LOG.info("Compiled Groovy Script [{}] in [{}] ms", gFile.getName(), System.currentTimeMillis()-start);
+			}
+			
 			branchCtx = wapp.run();
+			branchCtx.setId("SubDeploy-[" + subDeploy + "]");
+			//= wapp.run();
 //			DefaultListableBeanFactory beanFactory = (DefaultListableBeanFactory) branchCtx.getBeanFactory();
 //			beanFactory.registerBeanDefinition(subDeploy + "ObjectName", BeanDefinitionBuilder.genericBeanDefinition(ObjectName.class).addConstructorArgValue(
 //					branchCtx.getBeansOfType(DeploymentBranch.class).values().iterator().next().getObjectName().toString()
 //			).getBeanDefinition());
-			branchCtx.setId("SubDeploy-[" + subDeploy + "]");			
+						
 			
 		} catch (Exception ex) {
 			LOG.error("Failed to deploy Branch for [" + subDeploy + "]", ex);
@@ -240,7 +260,7 @@ public class SubContextBoot {
 		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
 		AnnotationConfigApplicationContext appCtx = null;
 		try {
-			ClassLoader branchClassLoader = loadBranchLibs(subDeploy);
+			OpenTypeEnabledURLClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 			Thread.currentThread().setContextClassLoader(branchClassLoader);			
 			appCtx = new AnnotationConfigApplicationContext();
 			appCtx.setParent(parent);
@@ -289,13 +309,14 @@ public class SubContextBoot {
 		}
 	}	
 	
+	public static final URL[] EMPTY_URL_ARR = {}; 
 	
 	/**
 	 * Returns a ClassLoader for the specified lib directory, or the context class loader if the dir does not exist or has no jars
 	 * @param subDeploy The directory to search in
 	 * @return a classloader
 	 */
-	protected static ClassLoader loadBranchLibs(File subDeploy) {
+	protected static OpenTypeEnabledURLClassLoader loadBranchLibs(File subDeploy) {
 		File libDir = new File(subDeploy, "lib");
 		if(libDir.exists() && libDir.isDirectory()) {
 			Path pDir = libDir.toPath();
@@ -305,7 +326,7 @@ public class SubContextBoot {
 				return new OpenTypeEnabledURLClassLoader(jarUrls.toArray(new URL[jarUrls.size()]), Thread.currentThread().getContextClassLoader());
 			}
 		} 
-		return Thread.currentThread().getContextClassLoader();
+		return new OpenTypeEnabledURLClassLoader(EMPTY_URL_ARR, Thread.currentThread().getContextClassLoader());
 	}
 	
 	/**

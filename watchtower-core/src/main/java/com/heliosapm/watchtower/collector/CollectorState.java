@@ -49,6 +49,8 @@ public enum CollectorState {
 	BUST,
 	/** The bean has been isolated on account of serial collection or connection errors */
 	ISOLATED,
+	/** The bean cannot connect to an unreliable resource (like a connection) */
+	DOWN,
 	/** The bean is in a blackout window */
 	BLACKOUT;
 }

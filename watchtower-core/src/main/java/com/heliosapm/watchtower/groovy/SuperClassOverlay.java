@@ -25,12 +25,12 @@
 package com.heliosapm.watchtower.groovy;
 
 import org.codehaus.groovy.ast.ClassNode;
+import org.codehaus.groovy.ast.ConstructorNode;
 import org.codehaus.groovy.classgen.GeneratorContext;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.codehaus.groovy.control.CompilePhase;
 import org.codehaus.groovy.control.SourceUnit;
 import org.codehaus.groovy.control.customizers.CompilationCustomizer;
-import org.codehaus.groovy.control.customizers.DelegatingCustomizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,21 +47,25 @@ public class SuperClassOverlay extends CompilationCustomizer {
 	protected static final Logger log = LoggerFactory.getLogger(SuperClassOverlay.class);
 
 	/** The super class to overlay */
-	protected final Class<?> superClass;
-	
+	protected final ClassNode superClass;	
 	/**
 	 * Creates a new conversion phase SuperClassOverlay
 	 * @param superClass The super class to overlay
 	 */
 	public SuperClassOverlay(Class<?> superClass) {
 		super(CompilePhase.CONVERSION);
-		this.superClass = superClass;
+		this.superClass = new ClassNode(superClass);
+		
 	}
 
 	@Override
 	public void call(SourceUnit source, GeneratorContext context, ClassNode classNode) throws CompilationFailedException {
 		StringBuilder b = new StringBuilder("\n\t******************\n\tCompilation Customizer Callback\n\tClass:").append(classNode.getName()).append("\n\t******************\n");
-		classNode.setSuperClass(new ClassNode(superClass));
+		classNode.setSuperClass(superClass);
+		for(ConstructorNode cn: superClass.getDeclaredConstructors()) {
+			classNode.addConstructor(cn);
+		}
+		
 		log.info(b.toString());
 		
 	}
