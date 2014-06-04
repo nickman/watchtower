@@ -1,5 +1,5 @@
 
-package com.heliosapm.watchtower.groovy;
+package com.heliosapm.watchtower.groovy.annotation;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>Description:  Type level annotation to specify the name of the script.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.watchtower.groovy.ScriptName</code></p>
+ * <p><code>com.heliosapm.watchtower.groovy.annotation.ScriptName</code></p>
  */
 @Target(value={CONSTRUCTOR,FIELD,LOCAL_VARIABLE,METHOD,PARAMETER,TYPE})
 @Retention(RetentionPolicy.RUNTIME)

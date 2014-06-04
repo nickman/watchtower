@@ -27,6 +27,8 @@ package com.heliosapm.watchtower.groovy;
 import java.util.Map;
 import java.util.Set;
 
+import com.heliosapm.watchtower.groovy.annotation.ScriptName;
+
 /**
  * <p>Title: GroovyServiceMXBean</p>
  * <p>Description: JMX MXBean interface for {@link GroovyService}.</p> 

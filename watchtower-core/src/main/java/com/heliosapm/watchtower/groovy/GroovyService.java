@@ -39,6 +39,9 @@ import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.heliosapm.watchtower.groovy.annotation.ScriptName;
+import com.heliosapm.watchtower.groovy.annotation.Start;
+
 /**
  * <p>Title: GroovyService</p>
  * <p>Description: container wide Groovy script compiler, interpreter and executor.</p> 

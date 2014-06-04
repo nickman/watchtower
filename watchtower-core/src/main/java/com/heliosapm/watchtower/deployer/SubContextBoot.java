@@ -135,7 +135,8 @@ public class SubContextBoot {
 	
 	/** The default imports */
 	public static final Set<String> DEFAULT_IMPORTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
-			"import groovy.transform.*"
+			"import groovy.transform.*", "import java.util.concurrent.atomic.*", "import java.util.concurrent.*",
+			"import com.heliosapm.watchtower.groovy.annotation.*"
 	)));
 	
 	protected static final SuperClassOverlay SUPERCLASS_OVERLAY = new SuperClassOverlay(GroovyCollector.class);
