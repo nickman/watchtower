@@ -3,12 +3,18 @@
  */
 package com.heliosapm.watchtower.core.impl;
 
+import groovy.lang.Closure;
 import groovy.lang.GroovyObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,7 +23,11 @@ import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
 import org.helios.jmx.util.helpers.JMXHelper;
+import org.helios.jmx.util.helpers.SystemClock;
+import org.helios.jmx.util.helpers.SystemClock.ElapsedTime;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.BeanNameGenerator;
@@ -32,6 +42,7 @@ import ch.qos.logback.classic.LoggerContext;
 
 import com.heliosapm.watchtower.collector.CollectorState;
 import com.heliosapm.watchtower.component.APMLogLevel;
+import com.heliosapm.watchtower.core.ServiceAspect;
 import com.heliosapm.watchtower.deployer.DeploymentBranch;
 
 /**
@@ -42,7 +53,7 @@ import com.heliosapm.watchtower.deployer.DeploymentBranch;
  * <p><b><code>com.heliosapm.watchtower.core.impl.ServiceAspectImpl</code></b>
  */
 @ManagedResource
-public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator {
+public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, InitializingBean, DisposableBean {
 	/** The logger context */
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
@@ -57,59 +68,91 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator {
 	/** The state of this component */
 	protected final AtomicReference<CollectorState> state = new AtomicReference<CollectorState>(CollectorState.INIT); 
 	
+	/** The parent deployment branch */
 	protected DeploymentBranch parent;
-	/**
-	 * Returns the 
-	 * @return the parent
-	 */
-	public DeploymentBranch getParent() {
-		return parent;
-	}
-
-
-	/**
-	 * Sets the 
-	 * @param parent the parent to set
-	 */
-	public void setParent(DeploymentBranch parent) {
-		this.parent = parent;
-	}
-
+	/** The service source file */
 	protected File sourceFile;
+	/** The service aspect bit mask */
+	protected final int aspectBitMask;
+	/** A map of closures keyed by the corresponding ServiceAspect */
+	protected final Map<ServiceAspect, Closure<?>> closures = new EnumMap<ServiceAspect, Closure<?>>(ServiceAspect.class); 
+	/** A map of annotations found on closures keyed by the corresponding ServiceAspect */
+	protected final Map<ServiceAspect, Annotation> closureAnnotations = new EnumMap<ServiceAspect, Annotation>(ServiceAspect.class); 
 	
-	/**
-	 * Returns the 
-	 * @return the sourceFile
-	 */
-	public File getSourceFile() {
-		return sourceFile;
-	}
-
-
-	/**
-	 * Sets the 
-	 * @param sourceFile the sourceFile to set
-	 */
-	public void setSourceFile(File sourceFile) {
-		this.sourceFile = sourceFile;
-	}
-
 
 	/**
 	 * Creates a new ServiceAspectImpl
 	 */
-	
-//	public ServiceAspectImpl(DeploymentBranch parent, File source) {
-//		this.beanName = getClass().getName();
-//		this.parent = parent;
-//		sourceFile = source;
-//	}
-	
 	public ServiceAspectImpl() {
-		
+		aspectBitMask = ServiceAspect.computeBitMask(getClass());
+		loadClosures();
+	}
+	
+	/**
+	 * Loads the closure map
+	 */
+	protected void loadClosures() {
+		ElapsedTime et = SystemClock.startClock();
+		@SuppressWarnings("rawtypes")
+		final Map<Field, Closure> fieldValues = getFieldsOfType(Closure.class);
+		for(ServiceAspect sa: ServiceAspect.values()) {
+			if(sa.isEnabled(aspectBitMask)) {
+				for(Field f: fieldValues.keySet()) {
+					Annotation ann = f.getAnnotation(sa.getAnnotationType());
+					if(ann!=null) {
+						closures.put(sa, fieldValues.get(f));
+						closureAnnotations.put(sa, ann);
+					}
+				}
+			}
+		}
+		info("Loaded %s closures in %s ms.", closures.size(), et.elapsedMs());
+	}
+	
+	/**
+	 * Finds all the declared fields in this class of the passed type
+	 * @param clazz The type of the fields to get
+	 * @return a map of the field values keyed by the field
+	 */
+	protected <T> Map<Field, T> getFieldsOfType(Class<T> clazz) {
+		Field[] dfields = getClass().getDeclaredFields();		
+		Map<Field, T> fields = new HashMap<Field, T>(ServiceAspect.ASPECT_COUNT);
+		try {
+			for(Field f: dfields) {
+				if(clazz.isAssignableFrom(f.getType())) {
+					f.setAccessible(true);
+					fields.put(f, clazz.cast(f.get(this)));					
+				}
+			}
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to read field values", ex);
+		}
+		return fields;
 	}
 		
+	/**
+	 * {@inheritDoc}
+	 * @see org.springframework.beans.factory.InitializingBean#afterPropertiesSet()
+	 */
+	public void afterPropertiesSet() {
+		if(ServiceAspect.STARTER.isEnabled(aspectBitMask)) {
+			try {
+				start();
+			} catch (Exception ex) {
+				throw new RuntimeException("Start failed", ex);
+			}
+		}
+	}
 	
+	/**
+	 * {@inheritDoc}
+	 * @see org.springframework.beans.factory.DisposableBean#destroy()
+	 */
+	public void destroy() {
+		if(ServiceAspect.STOPPER.isEnabled(aspectBitMask)) {
+			stop();
+		}		
+	}
 	
 	/**
 	 * Called when bean is started.
@@ -226,6 +269,42 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator {
 	
 	
 	// ==========================================================================================
+	
+	/**
+	 * Returns the deployment branch parent
+	 * @return the parent
+	 */
+	public DeploymentBranch getParent() {
+		return parent;
+	}
+
+
+	/**
+	 * Sets the deployment branch parent 
+	 * @param parent the parent to set
+	 */
+	public void setParent(DeploymentBranch parent) {
+		this.parent = parent;
+	}
+	
+	/**
+	 * Returns the source file for this service 
+	 * @return the sourceFile
+	 */
+	public File getSourceFile() {
+		return sourceFile;
+	}
+
+
+	/**
+	 * Sets the source file for this service 
+	 * @param sourceFile the sourceFile to set
+	 */
+	public void setSourceFile(File sourceFile) {
+		this.sourceFile = sourceFile;
+	}
+
+	
 	
 	/**
 	 * Returns the compiled deployment script

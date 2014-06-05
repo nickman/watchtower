@@ -3,7 +3,9 @@
  */
 package com.heliosapm.watchtower.groovy;
 
-import java.util.List;
+import java.lang.annotation.Annotation;
+import java.util.EnumMap;
+import java.util.Map;
 
 import org.codehaus.groovy.ast.AnnotationNode;
 import org.codehaus.groovy.ast.ClassNode;
@@ -17,8 +19,7 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 
-import com.heliosapm.watchtower.core.impl.ILifecycle;
-import com.heliosapm.watchtower.groovy.annotation.Lifecycle;
+import com.heliosapm.watchtower.core.ServiceAspect;
 
 /**
  * <p>Title: ServiceAspectCompiler</p>
@@ -29,9 +30,20 @@ import com.heliosapm.watchtower.groovy.annotation.Lifecycle;
  */
 
 public class ServiceAspectCompiler extends CompilationCustomizer {
-	private static final AnnotationNode LIFECYCLE_ANNOTATION_NODE = new AnnotationNode(new ClassNode(Lifecycle.class));
-	private static final ClassNode LIFECYCLE_ANNOTATION_CNODE = new ClassNode(Lifecycle.class);
-	private static final ClassNode LIFECYCLE_IFACE_NODE = new ClassNode(ILifecycle.class);
+	
+	private static final Map<ServiceAspect, AnnotationNode> annotationNodes = new EnumMap<ServiceAspect, AnnotationNode>(ServiceAspect.class);
+	private static final Map<ServiceAspect, ClassNode> annotationClassNodes = new EnumMap<ServiceAspect, ClassNode>(ServiceAspect.class);
+	private static final Map<ServiceAspect, ClassNode> ifaceClassNodes = new EnumMap<ServiceAspect, ClassNode>(ServiceAspect.class);
+	
+	static {
+		for(ServiceAspect sa: ServiceAspect.values()) {
+			ClassNode cn = new ClassNode(sa.getAnnotationType());
+			annotationNodes.put(sa, new AnnotationNode(cn));
+			annotationClassNodes.put(sa, cn);
+			ifaceClassNodes.put(sa, new ClassNode(sa.getBoundInterface()));
+		}
+	}
+	
 	
 	/** Instance logger */	
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
@@ -57,9 +69,10 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	@Override
 	public void call(SourceUnit source, GeneratorContext context, ClassNode classNode) throws CompilationFailedException {
 		for(AnnotationNode anode : classNode.getAnnotations()) {
-			if(anode.getClassNode().getTypeClass().equals(Lifecycle.class)) {
-				classNode.addInterface(LIFECYCLE_IFACE_NODE);
-				break;
+			Class<? extends Annotation> annClass = anode.getClassNode().getTypeClass();
+			ServiceAspect sa = ServiceAspect.getAspectForAnnotation(annClass);
+			if(sa!=null) {
+				classNode.addInterface(ifaceClassNodes.get(sa));
 			}
 		}
 	}
