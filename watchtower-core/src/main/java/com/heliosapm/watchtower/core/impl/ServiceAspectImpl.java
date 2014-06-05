@@ -6,10 +6,7 @@ package com.heliosapm.watchtower.core.impl;
 import groovy.lang.Closure;
 import groovy.lang.GroovyObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.EnumMap;
@@ -20,9 +17,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.management.MalformedObjectNameException;
+import javax.management.Notification;
 import javax.management.ObjectName;
 
 import org.helios.jmx.util.helpers.JMXHelper;
+import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.SystemClock;
 import org.helios.jmx.util.helpers.SystemClock.ElapsedTime;
 import org.slf4j.LoggerFactory;
@@ -41,7 +40,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 
 import com.heliosapm.watchtower.collector.CollectorState;
-import com.heliosapm.watchtower.component.APMLogLevel;
 import com.heliosapm.watchtower.core.ServiceAspect;
 import com.heliosapm.watchtower.deployer.DeploymentBranch;
 
@@ -79,13 +77,14 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	/** A map of annotations found on closures keyed by the corresponding ServiceAspect */
 	protected final Map<ServiceAspect, Annotation> closureAnnotations = new EnumMap<ServiceAspect, Annotation>(ServiceAspect.class); 
 	
+	/** This bean's ObjectName */
+	protected ObjectName objectName = null;
 
 	/**
 	 * Creates a new ServiceAspectImpl
 	 */
 	public ServiceAspectImpl() {
-		aspectBitMask = ServiceAspect.computeBitMask(getClass());
-		loadClosures();
+		aspectBitMask = ServiceAspect.computeBitMask(getClass());		
 	}
 	
 	/**
@@ -93,20 +92,19 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	protected void loadClosures() {
 		ElapsedTime et = SystemClock.startClock();
-		@SuppressWarnings("rawtypes")
-		final Map<Field, Closure> fieldValues = getFieldsOfType(Closure.class);
+		final Map<Field, Object> fieldValues = getFieldsOfType(Object.class);
 		for(ServiceAspect sa: ServiceAspect.values()) {
 			if(sa.isEnabled(aspectBitMask)) {
 				for(Field f: fieldValues.keySet()) {
 					Annotation ann = f.getAnnotation(sa.getAnnotationType());
-					if(ann!=null) {
-						closures.put(sa, fieldValues.get(f));
+					if(ann!=null) {						
+						closures.put(sa, (Closure<?>)fieldValues.get(f));
 						closureAnnotations.put(sa, ann);
 					}
 				}
 			}
 		}
-		info("Loaded %s closures in %s ms.", closures.size(), et.elapsedMs());
+		log.info("Loaded {} closures in {} ms.", closures.size(), et.elapsedMs());
 	}
 	
 	/**
@@ -135,6 +133,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @see org.springframework.beans.factory.InitializingBean#afterPropertiesSet()
 	 */
 	public void afterPropertiesSet() {
+		loadClosures();
 		if(ServiceAspect.STARTER.isEnabled(aspectBitMask)) {
 			try {
 				start();
@@ -158,17 +157,17 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * Called when bean is started.
 	 * @throws Exception thrown on any errors starting the bean
 	 */	
-	@ManagedOperation
-	public final void start() throws Exception {
+//	@ManagedOperation
+	public void start() throws Exception {
 		try {
 			
 			if(isStarted()) throw new IllegalStateException("Cannot start component once it is started", new Throwable());
-			info(banner("Starting [", this.beanName, "]"));
+			log.info(StringHelper.banner("Starting [", this.beanName, "]"));
 			doStart();
 			started.set(true);
-			info(banner("Started [", this.beanName, "]"));
+			log.info(StringHelper.banner("Started [", this.beanName, "]"));
 		} catch (Exception e) {
-			error("Failed to start [", this.beanName, "]", e);
+			log.error("Failed to start [{}]", this.beanName, e);
 			throw e;
 		}
 	}
@@ -176,15 +175,15 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	/**
 	 * Called when bean is stopped
 	 */	
-	@ManagedOperation
-	public final void stop() {
+//	@ManagedOperation
+	public void stop() {
 		if(!isStarted()) throw new IllegalStateException("Cannot stop component once it is stopped", new Throwable());
 		try {
-			info(banner("Stopping [", this.beanName, "]"));
+			log.info(StringHelper.banner("Stopping [", this.beanName, "]"));
 			doStop();
-			info(banner("Stopped [", this.beanName, "]"));
+			log.info(StringHelper.banner("Stopped [", this.beanName, "]"));
 		} catch (Exception ex) {
-			warn("Problem stopping bean", ex);
+			log.warn("Problem stopping bean", ex);
 			
 		} finally {
 			started.set(false);
@@ -195,12 +194,26 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * To be implemented by concrete classes that have a specific start operation
 	 * @throws Exception thrown if startup fails
 	 */
-	protected void doStart() throws Exception {/* No Op */}
+	protected void doStart() throws Exception {
+		Closure<?> closure = closures.get(ServiceAspect.STARTER);
+		if(closure==null) {
+			log.warn("No closure found for ServiceAspect.STARTER");
+			return;
+		}
+		closure.call();
+	}
 	
 	/**
 	 * To be implemented by concrete classes that have a specific stop operation
 	 */
-	protected void doStop(){/* No Op */}
+	protected void doStop(){
+		Closure<?> closure = closures.get(ServiceAspect.STOPPER);
+		if(closure==null) {
+			log.warn("No closure found for ServiceAspect.STOPPER");
+			return;
+		}
+		closure.call();		
+	}
 	
 	/**
 	 * Indicates if this component is started
@@ -258,16 +271,22 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * Returns the schedule initial and period unit
 	 * @return the schedule initial and period unit
 	 */
-	@ManagedAttribute(description="The schedule initial and period unit")
 	public TimeUnit getUnit() { return null; }
 	/**
 	 * Sets the schedule initial and period unit
 	 * @param unit the unit
 	 */
-	@ManagedAttribute
 	public void setUnit(TimeUnit unit) {}
 	
-	
+	public String getScriptName() {
+		return beanName;
+	}
+	public void onEvent(Notification notification) {
+		
+	}
+	public void setDependency(String name, Object value) {
+		
+	}
 	// ==========================================================================================
 	
 	/**
@@ -368,138 +387,27 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	@ManagedAttribute(description="The logging level of this component")
 	public void setLevel(String levelName) {
 		this.log.setLevel(Level.toLevel(levelName, Level.INFO));
-		info("Set Logger to level [", this.log.getLevel().toString(), "]");
+		log.info("Set Logger to level [{}]", this.log.getLevel().toString());
 	}
 	
 	
-	/**
-	 * Issues a trace level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void trace(Object...msgs) {
-		logAtLevel(APMLogLevel.TRACE, msgs);
-	}
-	
-	/**
-	 * Issues a debug level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void debug(Object...msgs) {
-		logAtLevel(APMLogLevel.DEBUG, msgs);
-	}
-	
-	/**
-	 * Issues an info level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void info(Object...msgs) {
-		logAtLevel(APMLogLevel.INFO, msgs);
-	}
-	
-	/**
-	 * Issues a warn level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void warn(Object...msgs) {
-		logAtLevel(APMLogLevel.WARN, msgs);
-	}
-	
-	/**
-	 * Issues a error level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void error(Object...msgs) {
-		logAtLevel(APMLogLevel.ERROR, msgs);
-	}
-	
-	/**
-	 * Issues a fatal level logging request
-	 * @param msgs The objects to format into a log message
-	 */
-	protected void fatal(Object...msgs) {
-		logAtLevel(APMLogLevel.ERROR, msgs);
-	}
-	
-	
-	
-	
-	
-	
-	/**
-	 * Forwards the logging directive if the current level is enabled for the passed level
-	 * @param l The requested level
-	 * @param msgs The logged messages
-	 */
-	protected void logAtLevel(APMLogLevel l, Object...msgs) {
-		if(this.log.isEnabledFor(l.getLevel())) {
-			this.log.log(null, null, l.pCode(), format(msgs), new String[]{}, null);
-		}				
-	}
-	
-	/**
-	 * Wraps the passed object in a formatted banner
-	 * @param objs The objects to print inside the banner
-	 * @return a formated banner
-	 */
-	public static String banner(Object...objs) {
-		if(objs==null || objs.length<1) return "";
-		StringBuilder b = new StringBuilder("\n\t================================\n\t");
-		for(Object obj: objs) {
-			b.append(obj);
-		}
-		b.append("\n\t================================");
-		return b.toString();
-	}	
-	
-	/**
-	 * Formats the passed objects into a loggable string. 
-	 * If the last object is a {@link Throwable}, it will be formatted into a stack trace.
-	 * @param msgs The objects to log
-	 * @return the loggable string
-	 */
-	public static String format(Object...msgs) {
-		if(msgs==null||msgs.length<1) return "";
-		StringBuilder b = new StringBuilder();
-		int c = msgs.length-1;
-		for(int i = 0; i <= c; i++) {
-			if(i==c && msgs[i] instanceof Throwable) {
-				b.append(formatStackTrace((Throwable)msgs[i]));
-			} else {
-				b.append(msgs[i]);
-			}
-		}
-		return b.toString();
-	}
-	
-	/** EOL bytes */
-	private static final byte[] EOL = "\n".getBytes();
-	
-	/**
-	 * Formats a throwable's stack trace
-	 * @param t The throwable to format
-	 * @return the formatted stack trace
-	 */
-	public static String formatStackTrace(Throwable t) {
-		if(t==null) return "";
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		try {
-			baos.write(EOL);
-			t.printStackTrace(new PrintStream(baos, true));		
-			baos.flush();
-		} catch (IOException e) {
-			/* No Op */
-		}
-		return baos.toString();
-	}
 
 	@Override
 	public ObjectName getObjectName() throws MalformedObjectNameException {
-		return JMXHelper.objectName(parent.getObjectName().toString() + ",bean=" + getClass().getSimpleName());
+		return objectName;
 	}
 
 	@Override
 	public String generateBeanName(BeanDefinition definition, BeanDefinitionRegistry registry) {
 		return getClass().getName();
+	}
+
+	/**
+	 * Sets the 
+	 * @param objectName the objectName to set
+	 */
+	public void setObjectName(ObjectName objectName) {
+		this.objectName = objectName;
 	}
 		
 

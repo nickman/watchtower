@@ -44,6 +44,7 @@ import javax.management.Notification;
 import javax.management.ObjectName;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.SystemClock;
 import org.springframework.context.ApplicationContext;
@@ -88,6 +89,9 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	
 	/** The spring app supplied environment */
 	protected Environment environment = null;
+	
+	/** Thread pool for async deployment tasks */
+	protected JMXManagedThreadPool deploymentThreadPool = null;
 	
 	
 	
@@ -168,7 +172,7 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	 * @see com.heliosapm.watchtower.component.ServerComponentBean#doStart()
 	 */
 	protected void doStart() throws Exception {
-		
+		deploymentThreadPool = JMXHelper.getAttribute("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=DeploymentService", "Instance");
 //		if(applicationContext!=null) {
 //			ApplicationContext parent = applicationContext.getParent();
 //			if(parent!=null) {
@@ -192,8 +196,14 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 		if(objectName!=null && applicationContext!=null) {
 			applicationContext.setDisplayName(objectName.toString());
 		}
-		for(File subDir: deploymentDir.listFiles(SUBDIR_FILE_FILTER)) {
-			SubContextBoot.main(subDir, applicationContext, this, objectName);
+		for(final File subDir: deploymentDir.listFiles(SUBDIR_FILE_FILTER)) {
+			final DeploymentBranch self = this;
+			deploymentThreadPool.execute(new Runnable(){
+				public void run() {
+					SubContextBoot.main(subDir, applicationContext, self, objectName);
+				}
+			});
+			
 		}		
 		watchKey =  DeploymentWatchService.getWatchService().getWatchKey(deploymentDir.toPath(), this, WATCH_EVENT_TYPES);
 		//fireSubContextStarted();			
@@ -262,6 +272,30 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 //		
 //	}
 	
+	/**
+	 * Returns the split directory pair for a deployment directory
+	 * @param deploymentDirectory The deployment directory
+	 * @return the key-value pair
+	 */
+	public static String[] getDirectoryPair(File deploymentDirectory) {
+		String[] dirPair = dirPair(deploymentDirectory);
+		String dirKey = null;
+		String dirValue = null;
+		if(dirPair.length==1) {
+			dirPair = new String[]{"root", deploymentDirectory.getName()};
+		}
+
+		dirKey = dirPair[0];
+		if("branch".equals(dirKey)) {
+			throw new IllegalArgumentException("The passed deployment directory [" + deploymentDirectory + "] has an illegal key: [" + dirPair[0] + "]");
+		}
+		dirValue = dirPair[1];
+		if("lib".equals(dirValue) || "xlib".equals(dirValue)) {
+			dirKey = "ext";
+			dirPair[0] = "ext";
+		}
+		return new String[]{dirKey, dirValue};
+	}
 	
 	
 	protected void onEnvironmentSet() {

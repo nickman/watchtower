@@ -1,6 +1,9 @@
 
 package com.heliosapm.watchtower.groovy.annotation;
 
+import static java.lang.annotation.ElementType.FIELD;
+import static java.lang.annotation.ElementType.METHOD;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -14,7 +17,7 @@ import java.lang.annotation.Target;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.groovy.annotation.Stop</code></p>
  */
-@Target({ElementType.METHOD})
+@Target({METHOD, FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Stop {

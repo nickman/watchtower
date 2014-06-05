@@ -48,6 +48,7 @@ import javax.management.ObjectName;
 
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.helios.jmx.opentypes.otenabled.OpenTypeEnabledURLClassLoader;
+import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
@@ -170,9 +171,12 @@ public class SubContextBoot {
 				ex.printStackTrace(System.err);
 			}			
 		}		
-		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY, ServiceAspectCompiler.Instance);		
+		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY, ServiceAspectCompiler.Instance);
+//		cc.addCompilationCustomizers(GroovyService.getInstance().imports(null, DEFAULT_IMPORTS), SUPERCLASS_OVERLAY);
 		GroovyClassLoader gcl = new GroovyClassLoader(branchClassLoader, cc);
-		
+		for(URL url: branchClassLoader.getURLs()) {
+			gcl.addURL(url);
+		}
 		env.put("branch-file", subDeploy);
 		env.put("branch-cl", branchClassLoader);
 		env.put("branch-parent", parentBranch);
@@ -180,13 +184,14 @@ public class SubContextBoot {
 		if(objectName!=null) {
 			env.put("parentObjectName", objectName);
 		}
+		
 		WatchtowerApplication wapp = null;
 		ParentContextApplicationContextInitializer parentSetter = new ParentContextApplicationContextInitializer(parent);		
 		
 		ConfigurableApplicationContext branchCtx = null;
 		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
 		try {
-			Thread.currentThread().setContextClassLoader(branchClassLoader);	
+			Thread.currentThread().setContextClassLoader(gcl);	
 			ByteArrayResource subContextXml = new ByteArrayResource(String.format(DEPLOYMENT_BRANCH, subDeploy.getAbsolutePath()).getBytes()) {
 				/**
 				 * {@inheritDoc}
@@ -202,17 +207,21 @@ public class SubContextBoot {
 			wapp.setDefaultProperties(env);
 			wapp.setShowBanner(false);
 			wapp.setWebEnvironment(false);
-			branchCtx = wapp.createApplicationContext();
 			
+			final String[] dirPair = DeploymentBranch.getDirectoryPair(subDeploy); 
 			
-			
-			DefaultListableBeanFactory beanFactory = (DefaultListableBeanFactory) branchCtx.getBeanFactory();
 			for(int i = 0; i < args.length; i++) {
 				long start = System.currentTimeMillis();
 				File gFile = new File(args[i]);
 				Class<?> gclass = gcl.parseClass(gFile);
+				try {
+					gclass.newInstance();
+				} catch (Throwable t) {
+					throw new RuntimeException(String.format("Failed to load compiled class %s/%s", subDeploy.getAbsolutePath(), gFile.getName()), t);
+				}
 				wapp.addSources(new BeanDefinitionResource(BeanDefinitionBuilder.genericBeanDefinition(gclass)
-						.addPropertyValue("parent", parentBranch)
+//						.addPropertyValue("parent", parentBranch)
+						.addPropertyValue("objectName", JMXHelper.objectName(String.format("%s,%s=%s,bean=%s", objectName.toString(), dirPair[0], dirPair[1], gclass.getName())))
 						.addPropertyValue("sourceFile", gFile)
 //						.addConstructorArgValue(parentBranch)
 //						.addConstructorArgValue(gFile)

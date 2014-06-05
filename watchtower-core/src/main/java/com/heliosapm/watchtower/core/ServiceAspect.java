@@ -31,9 +31,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.codehaus.groovy.ast.AnnotationNode;
+import org.codehaus.groovy.ast.ClassNode;
 import org.helios.jmx.util.helpers.BitMaskedEnum;
 
 import com.heliosapm.watchtower.core.impl.ICollector;
+import com.heliosapm.watchtower.core.impl.IDependency;
+import com.heliosapm.watchtower.core.impl.IEventListener;
+import com.heliosapm.watchtower.core.impl.INamed;
 import com.heliosapm.watchtower.core.impl.ISchedulable;
 import com.heliosapm.watchtower.core.impl.IStart;
 import com.heliosapm.watchtower.core.impl.IStop;
@@ -60,13 +65,13 @@ public enum ServiceAspect implements BitMaskedEnum {
 	/** Scheduled by the watchtower collection scheduler */
 	SCHEDULED(Scheduled.class, ISchedulable.class),
 	/** Listens on events from the watchtower bus */
-	EVENTLISTENER(EventListener.class, null),
+	EVENTLISTENER(EventListener.class, IEventListener.class),
 	/** Has dependencies on other components in the watchtower bus */
-	DEPENDENT(Dependency.class, null),
-	/** Requires an unreliable resource connection  */
-	CONNECTOR(RequiresConnector.class, null),
+	DEPENDENT(Dependency.class, IDependency.class),
+//	/** Requires an unreliable resource connection  */
+//	CONNECTOR(RequiresConnector.class, null),
 	/** Specifies its own name */
-	NAMED(ScriptName.class, null),
+	NAMED(ScriptName.class, INamed.class),
 	/** Supports the watchtower service lifecycle start operation */
 	STARTER(Start.class, IStart.class),
 	/** Supports the watchtower service lifecycle start operation */
@@ -99,6 +104,9 @@ public enum ServiceAspect implements BitMaskedEnum {
 		this.annotationType = annotationType;
 		this.boundInterface = boundInterface;
 		mask = BitMaskedEnum.Support.getBitMask(0, this);
+		ifaceNode = new ClassNode(this.boundInterface);
+		annotationClassNode = new ClassNode(this.annotationType);
+		annotationNode = new AnnotationNode(annotationClassNode);
 	}
 	
 	
@@ -108,7 +116,12 @@ public enum ServiceAspect implements BitMaskedEnum {
 	final Class<? extends Annotation> annotationType; 
 	/** The implied service interface extrapolated from the annotation */
 	final Class<? extends IServiceAspect> boundInterface;
-
+	/** The iface node */
+	final ClassNode ifaceNode;
+	/** The annotation class node */
+	final ClassNode annotationClassNode;
+	/** The annotation node */
+	final AnnotationNode annotationNode;
 	
 	/**
 	 * Computes the service aspect bit mask for the passed class
@@ -217,5 +230,29 @@ public enum ServiceAspect implements BitMaskedEnum {
 	 */
 	public Class<? extends IServiceAspect> getBoundInterface() {
 		return boundInterface;
+	}
+
+	/**
+	 * Returns the bound interface node 
+	 * @return the ifaceNode
+	 */
+	public ClassNode getIfaceNode() {
+		return ifaceNode;
+	}
+
+	/**
+	 * Returns the annotation class node
+	 * @return the annotationClassNode
+	 */
+	public ClassNode getAnnotationClassNode() {
+		return annotationClassNode;
+	}
+
+	/**
+	 * Returns the annotation node
+	 * @return the annotationNode
+	 */
+	public AnnotationNode getAnnotationNode() {
+		return annotationNode;
 	}
 }
