@@ -43,7 +43,6 @@ import org.springframework.context.ApplicationContext;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
 import com.heliosapm.watchtower.cache.CacheStatistics;
 import com.heliosapm.watchtower.cache.CacheStatisticsMBean;
 import com.heliosapm.watchtower.collector.groovy.GroovyCollector;

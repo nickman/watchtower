@@ -24,9 +24,9 @@
  */
 package com.heliosapm.watchtower.collector.groovy;
 
-import org.codehaus.groovy.runtime.DefaultGroovyMethods;
-
 import groovy.lang.GroovyObject;
+
+import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 
 import com.heliosapm.watchtower.collector.BaseCollector;
 

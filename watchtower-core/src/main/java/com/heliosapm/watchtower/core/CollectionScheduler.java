@@ -47,7 +47,7 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 	 * Creates a new CollectionScheduler
 	 */
 	public CollectionScheduler() {		
-		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, CollectionScheduler.class.getSimpleName())), CollectionScheduler.class.getSimpleName(), false);
+		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + CollectionScheduler.class.getSimpleName()), CollectionScheduler.class.getSimpleName());
 	}
 
 }

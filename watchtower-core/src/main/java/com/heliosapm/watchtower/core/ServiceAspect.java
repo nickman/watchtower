@@ -45,7 +45,6 @@ import com.heliosapm.watchtower.core.impl.IStop;
 import com.heliosapm.watchtower.groovy.annotation.Collector;
 import com.heliosapm.watchtower.groovy.annotation.Dependency;
 import com.heliosapm.watchtower.groovy.annotation.EventListener;
-import com.heliosapm.watchtower.groovy.annotation.RequiresConnector;
 import com.heliosapm.watchtower.groovy.annotation.Scheduled;
 import com.heliosapm.watchtower.groovy.annotation.ScriptName;
 import com.heliosapm.watchtower.groovy.annotation.Start;

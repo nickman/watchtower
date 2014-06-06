@@ -26,6 +26,7 @@ package com.heliosapm.watchtower.jmx.server;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerFactory;
@@ -44,8 +45,8 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.ContextRefreshedEvent;
-
-import com.heliosapm.watchtower.Watchtower;
+import org.springframework.jmx.export.annotation.ManagedResource;
+import org.springframework.jmx.export.naming.SelfNaming;
 
 /**
  * <p>Title: JMXMPServer</p>
@@ -56,7 +57,8 @@ import com.heliosapm.watchtower.Watchtower;
  */
 @Configuration
 @EnableAutoConfiguration
-public class JMXMPServer implements ApplicationContextAware, ApplicationListener<ContextRefreshedEvent> {
+@ManagedResource
+public class JMXMPServer implements ApplicationContextAware, ApplicationListener<ContextRefreshedEvent>, SelfNaming {
 	@Value("${jmxmp.iface:0.0.0.0}")
 	protected String bindInterface;
 	@Value("${jmxmp.port:8006}")
@@ -83,6 +85,7 @@ public class JMXMPServer implements ApplicationContextAware, ApplicationListener
 				server = JMXConnectorServerFactory.newJMXConnectorServer(serviceURL, null, JMXHelper.getHeliosMBeanServer());
 				//JMXHelper.registerMBean(server, objectName);
 				server.start();
+				JMXHelper.registerMBean(server, objectName);
 				log.info(StringHelper.banner("Started JMXMPServer on [{}:{}]"), bindInterface, port);
 			} catch (Exception ex) {
 				log.error("Failed to start JMXMPServer on [{}:{}]", bindInterface, port, ex);
@@ -104,5 +107,14 @@ public class JMXMPServer implements ApplicationContextAware, ApplicationListener
 	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
 		this.applicationContext = applicationContext;
 		
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see org.springframework.jmx.export.naming.SelfNaming#getObjectName()
+	 */
+	@Override
+	public ObjectName getObjectName() throws MalformedObjectNameException {
+		return objectName;
 	}
 }

@@ -20,7 +20,6 @@ import javax.management.MalformedObjectNameException;
 import javax.management.Notification;
 import javax.management.ObjectName;
 
-import org.helios.jmx.util.helpers.JMXHelper;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.SystemClock;
 import org.helios.jmx.util.helpers.SystemClock.ElapsedTime;
@@ -30,8 +29,9 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.BeanNameGenerator;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
 import org.springframework.jmx.export.naming.SelfNaming;
 
@@ -51,7 +51,7 @@ import com.heliosapm.watchtower.deployer.DeploymentBranch;
  * <p><b><code>com.heliosapm.watchtower.core.impl.ServiceAspectImpl</code></b>
  */
 @ManagedResource
-public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, InitializingBean, DisposableBean {
+public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, InitializingBean, DisposableBean, ApplicationContextAware {
 	/** The logger context */
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
@@ -65,7 +65,8 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	protected final AtomicBoolean started = new AtomicBoolean(false);
 	/** The state of this component */
 	protected final AtomicReference<CollectorState> state = new AtomicReference<CollectorState>(CollectorState.INIT); 
-	
+	/** The application context this bean is deployed in */
+	protected ApplicationContext applicationContext = null;
 	/** The parent deployment branch */
 	protected DeploymentBranch parent;
 	/** The service source file */
@@ -133,6 +134,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @see org.springframework.beans.factory.InitializingBean#afterPropertiesSet()
 	 */
 	public void afterPropertiesSet() {
+		groovyObject = (GroovyObject)this;
 		loadClosures();
 		if(ServiceAspect.STARTER.isEnabled(aspectBitMask)) {
 			try {
@@ -141,6 +143,16 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				throw new RuntimeException("Start failed", ex);
 			}
 		}
+	}
+	
+	/**
+	 * Binds the default objects
+	 */
+	protected void bindDefaultBindings() {
+		groovyObject.setProperty("log", log);
+		groovyObject.setProperty("deploymentBranch", parent);
+		groovyObject.setProperty("appCtx", applicationContext);
+		
 	}
 	
 	/**
@@ -162,10 +174,10 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		try {
 			
 			if(isStarted()) throw new IllegalStateException("Cannot start component once it is started", new Throwable());
-			log.info(StringHelper.banner("Starting [", this.beanName, "]"));
+			log.info(StringHelper.banner("Starting [%s]", this.beanName));
 			doStart();
 			started.set(true);
-			log.info(StringHelper.banner("Started [", this.beanName, "]"));
+			log.info(StringHelper.banner("Started [%s]", this.beanName));
 		} catch (Exception e) {
 			log.error("Failed to start [{}]", this.beanName, e);
 			throw e;
@@ -179,9 +191,9 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	public void stop() {
 		if(!isStarted()) throw new IllegalStateException("Cannot stop component once it is stopped", new Throwable());
 		try {
-			log.info(StringHelper.banner("Stopping [", this.beanName, "]"));
+			log.info(StringHelper.banner("Stopping [%s]", this.beanName));
 			doStop();
-			log.info(StringHelper.banner("Stopped [", this.beanName, "]"));
+			log.info(StringHelper.banner("Stopped [%s]", this.beanName));
 		} catch (Exception ex) {
 			log.warn("Problem stopping bean", ex);
 			
@@ -408,6 +420,22 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	public void setObjectName(ObjectName objectName) {
 		this.objectName = objectName;
+	}
+
+	/**
+	 * Returns the application context this bean is deployed in
+	 * @return the applicationContext
+	 */
+	public ApplicationContext getApplicationContext() {
+		return applicationContext;
+	}
+
+	/**
+	 * Sets application context this bean is deployed in 
+	 * @param applicationContext the applicationContext to set
+	 */
+	public void setApplicationContext(ApplicationContext applicationContext) {
+		this.applicationContext = applicationContext;
 	}
 		
 

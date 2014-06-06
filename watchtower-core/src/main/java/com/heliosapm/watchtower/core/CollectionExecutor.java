@@ -46,8 +46,8 @@ public class CollectionExecutor extends JMXManagedThreadPool implements Collecti
 	/**
 	 * Creates a new CollectionExecutor
 	 */
-	public CollectionExecutor() {
-		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, CollectionExecutor.class.getSimpleName())), CollectionExecutor.class.getSimpleName(), false);
+	public CollectionExecutor() {		
+		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + CollectionExecutor.class.getSimpleName()), CollectionExecutor.class.getSimpleName());		
 	}
 
 	/**

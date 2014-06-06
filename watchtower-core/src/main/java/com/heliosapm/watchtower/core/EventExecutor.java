@@ -24,6 +24,7 @@
  */
 package com.heliosapm.watchtower.core;
 
+import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.springframework.beans.factory.annotation.Qualifier;
 
@@ -38,13 +39,13 @@ import com.heliosapm.watchtower.core.annotation.Propagate;
  */
 @Qualifier("SpringEvent")
 @Propagate
-public class EventExecutor extends CollectionExecutor implements EventExecutorMBean {
+public class EventExecutor extends JMXManagedThreadPool implements EventExecutorMBean {
 
 	/**
 	 * Creates a new EventExecutor
 	 */
 	public EventExecutor() {
-		super(JMXHelper.objectName(String.format(OBJECT_NAME_TEMPLATE, EventExecutor.class.getSimpleName())), EventExecutor.class.getSimpleName(), false);
+		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + EventExecutor.class.getSimpleName()), EventExecutor.class.getSimpleName());
 	}
 
 }

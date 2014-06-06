@@ -29,7 +29,6 @@ import javax.management.ObjectName;
 import org.helios.jmx.util.helpers.JMXHelper;
 
 import com.google.common.cache.Cache;
-import com.google.common.cache.LoadingCache;
 
 /**
  * <p>Title: CacheStatistics</p>
