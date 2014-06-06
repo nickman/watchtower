@@ -92,6 +92,10 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	
 	/** Thread pool for async deployment tasks */
 	protected JMXManagedThreadPool deploymentThreadPool = null;
+	/** Thread pool for collection execution */
+	protected JMXManagedThreadPool collectionThreadPool = null;
+	/** Thread pool for notification broadcast */
+	protected JMXManagedThreadPool notificationThreadPool = null;
 	
 	
 	

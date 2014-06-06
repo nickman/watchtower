@@ -28,8 +28,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import javax.management.MalformedObjectNameException;
+import javax.management.Notification;
+import javax.management.NotificationFilter;
+import javax.management.NotificationListener;
 import javax.management.ObjectName;
 
+import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +66,7 @@ import com.heliosapm.watchtower.jmx.server.JMXMPServer;
 @RestController
 //@EnableAutoConfiguration
 @ManagedResource
-public class WatchtowerCore implements ApplicationContextAware, SelfNaming, ApplicationListener<ContextRefreshedEvent> {
+public class WatchtowerCore implements ApplicationContextAware, SelfNaming, ApplicationListener<ContextRefreshedEvent>, NotificationListener, NotificationFilter {
 	/** The watchtower core singleton instance */
 	private static volatile WatchtowerCore instance = null;
 	/** The watchtower core singleton instance ctor lock */
@@ -80,9 +84,8 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 				" http://www.springframework.org/schema/aop" + 
 				" http://www.springframework.org/schema/aop/spring-aop.xsd" + 
 				" http://www.springframework.org/schema/context" + 
-				" http://www.springframework.org/schema/context/spring-context.xsd\"><context:annotation-config/>" + 
+				" http://www.springframework.org/schema/context/spring-context.xsd\">" +  // <context:annotation-config/> 
 				"<bean id=\"DeploymentWatchService\" class=\"com.heliosapm.watchtower.deployer.DeploymentWatchService\" factory-method=\"getWatchService\"/>" + 
-//				"<bean id=\"Watchtower\" class=\"com.heliosapm.watchtower.Watchtower\" factory-method=\"getInstance\"/>" + 
 				"</beans>";
 
 	/** The watchtower root application context */
@@ -98,6 +101,13 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 			return "WatchtowerCore.xml";
 		}
 	};
+	/** Thread pool for async deployment tasks */
+	protected JMXManagedThreadPool deploymentThreadPool = null;
+	/** Thread pool for collection execution */
+	protected JMXManagedThreadPool collectionThreadPool = null;
+	/** Thread pool for notification broadcast */
+	protected JMXManagedThreadPool notificationThreadPool = null;
+	
 	
 	/**
 	 * Acquires the watchtower singleton instance
@@ -128,11 +138,9 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 	public void onApplicationEvent(ContextRefreshedEvent event) {
 		if(event.getApplicationContext()!=appCtx) return;
 		WatchtowerApplication children = new WatchtowerApplication(JMXMPServer.class, CollectionScheduler.class, CollectionExecutor.class, EventExecutor.class, fileWatcherXml);
-		
 		children.setShowBanner(false);
 		children.setWebEnvironment(false);
 		children.setParent(appCtx);
-		
 		ApplicationContext ctx = children.run();
 	}
 	
@@ -242,6 +250,25 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 	 */
 	public DeploymentWatchService getWatchService() {
 		return watchService;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see javax.management.NotificationFilter#isNotificationEnabled(javax.management.Notification)
+	 */
+	@Override
+	public boolean isNotificationEnabled(Notification notification) {
+		return false;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see javax.management.NotificationListener#handleNotification(javax.management.Notification, java.lang.Object)
+	 */
+	@Override
+	public void handleNotification(Notification notification, Object handback) {
+		// TODO Auto-generated method stub
+		//com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=		
 	}
 	
 	

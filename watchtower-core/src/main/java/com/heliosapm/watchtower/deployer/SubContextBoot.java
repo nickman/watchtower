@@ -257,64 +257,6 @@ public class SubContextBoot {
 	}
 	
 	
-	/**
-	 * The watchtower main boot
-	 * @param subDeploy The sub deployment directory
-	 * @param parent The parent app context
-	 */
-	@SuppressWarnings("resource")
-	public static void mainx(File subDeploy, ConfigurableApplicationContext parent) {
-		final ClassLoader cl = Thread.currentThread().getContextClassLoader();
-		AnnotationConfigApplicationContext appCtx = null;
-		try {
-			OpenTypeEnabledURLClassLoader branchClassLoader = loadBranchLibs(subDeploy);
-			Thread.currentThread().setContextClassLoader(branchClassLoader);			
-			appCtx = new AnnotationConfigApplicationContext();
-			appCtx.setParent(parent);
-			appCtx.setId("SubDeploy-[" + subDeploy + "]");
-			ByteArrayResource fileWatcherXml = new ByteArrayResource(BEANS_HEADER.getBytes()) {
-				/**
-				 * {@inheritDoc}
-				 * @see org.springframework.core.io.AbstractResource#getFilename()
-				 */
-				@Override
-				public String getFilename() {				
-					return "DeploymentWatchService.xml";
-				}
-			};
-			
-			XmlBeanDefinitionReader xmlReader = new XmlBeanDefinitionReader(appCtx);
-			xmlReader.loadBeanDefinitions(fileWatcherXml);
-			
-			GenericBeanDefinition beanDef = new GenericBeanDefinition();
-			beanDef.setBeanClassName("com.heliosapm.watchtower.deployer.DeploymentBranch");
-			beanDef.setDescription("DeploymentBranch [" + subDeploy + "]");
-			ConstructorArgumentValues ctorArgs = new ConstructorArgumentValues();
-			ctorArgs.addGenericArgumentValue(subDeploy);
-			ctorArgs.addGenericArgumentValue(branchClassLoader);
-			beanDef.setConstructorArgumentValues(ctorArgs);
-			appCtx.registerBeanDefinition(subDeploy.getName(), beanDef);
-//			beanDef = new GenericBeanDefinition();
-//			beanDef.setBeanClassName(AnnotationMBeanExporter.class.getName());
-//			MutablePropertyValues mpv = new MutablePropertyValues();
-//			mpv.add("server", JMXHelper.getHeliosMBeanServer());
-//			beanDef.setPropertyValues(mpv);
-//			appCtx.registerBeanDefinition(AnnotationMBeanExporter.class.getSimpleName(), beanDef);
-			appCtx.refresh();
-		} finally {
-			Thread.currentThread().setContextClassLoader(cl);
-		}
-		
-		if(LOG.isDebugEnabled()) {
-			StringBuilder b = new StringBuilder();
-			for(String s: appCtx.getBeanDefinitionNames()) {
-				b.append("\n\t\t").append(s);
-			}
-			LOG.debug(StringHelper.banner("Started SubContext: [{}]\n\tBean Names:{}"), appCtx.getId(), b.toString());
-		} else {
-			LOG.info("Started SubContext: [{}]", appCtx.getId());
-		}
-	}	
 	
 	public static final URL[] EMPTY_URL_ARR = {}; 
 	

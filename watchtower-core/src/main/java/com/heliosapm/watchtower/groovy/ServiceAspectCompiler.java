@@ -6,16 +6,16 @@ package com.heliosapm.watchtower.groovy;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import javax.management.Notification;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.codehaus.groovy.ast.ASTNode;
 import org.codehaus.groovy.ast.AnnotationNode;
 import org.codehaus.groovy.ast.ClassHelper;
 import org.codehaus.groovy.ast.ClassNode;
 import org.codehaus.groovy.ast.FieldNode;
+import org.codehaus.groovy.ast.MethodNode;
 import org.codehaus.groovy.ast.Parameter;
 import org.codehaus.groovy.ast.builder.AstBuilder;
 import org.codehaus.groovy.ast.stmt.Statement;
@@ -30,9 +30,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 
 import com.heliosapm.watchtower.core.ServiceAspect;
-import com.heliosapm.watchtower.core.impl.CollectionResult;
-import com.heliosapm.watchtower.core.impl.IAllIServiceAspects;
-import com.heliosapm.watchtower.core.impl.ServiceAspectImpl;
 
 /**
  * <p>Title: ServiceAspectCompiler</p>
@@ -48,7 +45,9 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	/** Instance logger */	
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
-	protected Logger log = logCtx.getLogger(getClass());
+	protected final Logger log = logCtx.getLogger(getClass());
+	/** A cache of interface implementing source keyed by method */
+	protected final ConcurrentHashMap<Method, String> sourceCache = new ConcurrentHashMap<Method, String>();
 
 
 	
@@ -88,55 +87,9 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 					if(sa!=null) {
 						 
 						classNode.addInterface(sa.getIfaceNode());
-//						Method m = sa.getBoundInterface().getDeclaredMethods()[0];
-//						
-//						Class<?>[] pTypes = m.getParameterTypes();
-//						Parameter[] params = new Parameter[pTypes.length];
-//						for(int i = 0; i < pTypes.length; i++) {
-//							params[i] = new Parameter(new ClassNode(pTypes[i]), "p"+i); 										
-//						}
-//						MethodNode methodNode = TEMPLATE.getDeclaredMethod(m.getName(), params);
-//						String statementText = methodNode.getFirstStatement().getText();
-//						//methodNode.setDeclaringClass(classNode);
-//						
-//						
-//						classNode.addMethod(methodNode.getName(), methodNode.getModifiers(), methodNode.getReturnType(), methodNode.getParameters(), methodNode.getExceptions(), methodNode.getFirstStatement());
-						Method m = sa.getBoundInterface().getDeclaredMethods()[0];
-						StringBuilder astCode = new StringBuilder();
-						final boolean isReturn = !void.class.equals(m.getReturnType());
-						if(isReturn) {
-							astCode.append("return super.").append(m.getName()).append("(");
-						} else {
-							astCode.append("super.").append(m.getName()).append("(");
+						for(MethodNode mn: buildMethodNodes(sa.getBoundInterface())) {
+							classNode.addMethod(mn);
 						}
-						
-								
-						Class<?>[] pTypes = m.getParameterTypes();
-						Class<?>[] xTypes = m.getExceptionTypes();
-						
-						Parameter[] params = new Parameter[pTypes.length];
-						ClassNode[] exes = new ClassNode[xTypes.length];
-						
-						if(pTypes.length > 0) {
-							for(int i = 0; i < pTypes.length; i++) {
-								params[i] = new Parameter(ClassHelper.make(pTypes[i]), "p"+i); 										
-								astCode.append(pTypes[i].getName()).append(" p").append(i).append(",");
-							}
-							astCode.deleteCharAt(astCode.length()-1);
-						}
-						astCode.append(");");
-						if(!isReturn) {
-							astCode.append("return;");
-						}						
-						for(int i = 0; i < xTypes.length; i++) {
-							exes[i] = new ClassNode(xTypes[i]);
-						}
-												
-						AstBuilder builder = new AstBuilder();
-						List<ASTNode> nodes = builder.buildFromString(CompilePhase.CLASS_GENERATION, astCode.toString());
-						Statement statement = (Statement)nodes.get(0);
-						classNode.addMethod(m.getName(), m.getModifiers() & ~Modifier.ABSTRACT, ClassHelper.make(m.getReturnType()), params, exes, statement);
-						
 						b.append("\n\t").append(sa.getBoundInterface().getSimpleName());
 					}
 				}
@@ -145,163 +98,73 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 		log.info(b.toString());
 	}
 	
-	private static class EmptyImpl extends ServiceAspectImpl implements IAllIServiceAspects {
-
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.IDependency#setDependency(java.lang.String, java.lang.Object)
-		 */
-		@Override
-		public void setDependency(String name, Object value) {
-			super.setDependency(name, value);
-			
+	
+	/**
+	 * Builds an array of method nodes for the passed class's declared methods
+	 * @param clazz The class to build methods nodes for
+	 * @return an array of method nodes
+	 */
+	protected MethodNode[] buildMethodNodes(Class<?> clazz) {
+		Method[] methods = clazz.getDeclaredMethods();
+		List<MethodNode> methodNodes = new ArrayList<MethodNode>(methods.length);
+		for(Method m: methods) {
+			methodNodes.add(buildMethodNode(m));
 		}
-
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.IEventListener#onEvent(javax.management.Notification)
-		 */
-		@Override
-		public void onEvent(Notification notification) {
-			super.onEvent(notification);
-			
-		}
-
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.INamed#getScriptName()
-		 */
-		@Override
-		public String getScriptName() {
-			return super.getScriptName();
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#cancelSchedule()
-		 */
-		@Override
-		public void cancelSchedule() {
-			super.cancelSchedule();
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#collect()
-		 */
-		@Override
-		public CollectionResult collect() {
-			return super.collect();
-		}
-		
-/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#getInitial()
-		 */
-		@Override
-		public long getInitial() {
-			return super.getInitial();
-		}
-		
-/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#getPeriod()
-		 */
-		@Override
-		public long getPeriod() {
-			return super.getPeriod();
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#getUnit()
-		 */
-		@Override
-		public TimeUnit getUnit() {
-			return super.getUnit();
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#schedule(long, long, java.util.concurrent.TimeUnit)
-		 */
-		@Override
-		public void schedule(long period, long initial, TimeUnit unit) {
-			super.schedule(period, initial, unit);
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#setInitial(long)
-		 */
-		@Override
-		public void setInitial(long initial) {
-			super.setInitial(initial);
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#setPeriod(long)
-		 */
-		@Override
-		public void setPeriod(long period) {
-			super.setPeriod(period);
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#setUnit(java.util.concurrent.TimeUnit)
-		 */
-		@Override
-		public void setUnit(TimeUnit unit) {
-			super.setUnit(unit);
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#start()
-		 */
-		@Override
-		public void start() throws Exception {			
-			super.start();
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.watchtower.core.impl.ServiceAspectImpl#stop()
-		 */
-		@Override
-		public void stop() {
-			super.stop();
-		}
+		return methodNodes.toArray(new MethodNode[methods.length]);
 	}
 	
-	private static final ClassNode TEMPLATE = new ClassNode(EmptyImpl.class);
+	/**
+	 * Builds a method node that implements the passed method
+	 * @param m The method to build the method node for
+	 * @return the method node
+	 */
+	protected MethodNode buildMethodNode(Method m) {
+		Class<?>[] pTypes = m.getParameterTypes();
+		Class<?>[] xTypes = m.getExceptionTypes();
 
+		String source = sourceCache.get(m);
+		
+		if(source==null) {
+			synchronized(sourceCache) {
+				source = sourceCache.get(m);
+				if(source==null) {
+					StringBuilder astCode = new StringBuilder();
+					final boolean isReturn = !void.class.equals(m.getReturnType());
+					if(isReturn) {
+						astCode.append("return super.").append(m.getName()).append("(");
+					} else {
+						astCode.append("super.").append(m.getName()).append("(");
+					}
+					if(pTypes.length > 0) {
+						for(int i = 0; i < pTypes.length; i++) {
+							astCode.append(pTypes[i].getName()).append(" p").append(i).append(",");
+						}
+						astCode.deleteCharAt(astCode.length()-1);
+					}
+					astCode.append(");");
+					if(!isReturn) {
+						astCode.append("return;");
+					}						
+					source = astCode.toString();
+					sourceCache.put(m, source);
+				}
+			}
+		}
+		Parameter[] params = new Parameter[pTypes.length];
+		ClassNode[] exes = new ClassNode[xTypes.length];		
+		for(int i = 0; i < pTypes.length; i++) {
+			params[i] = new Parameter(ClassHelper.make(pTypes[i]), "p"+i); 			
+		}		
+		for(int i = 0; i < xTypes.length; i++) {
+			exes[i] = new ClassNode(xTypes[i]);
+		}								
+		AstBuilder builder = new AstBuilder();
+		List<ASTNode> nodes = builder.buildFromString(CompilePhase.CLASS_GENERATION, source);
+		Statement statement = (Statement)nodes.get(0);
+		return new MethodNode(m.getName(), m.getModifiers() & ~Modifier.ABSTRACT, ClassHelper.make(m.getReturnType()), params, exes, statement);		
+	}
+	
+	
+	
 }
 
-/*
-						Method m = clazz.getDeclaredMethods()[0];
-						StringBuilder astCode = new StringBuilder("return super.").append(m.getName()).append("(");
-								
-						Class<?>[] pTypes = m.getParameterTypes();
-						Class<?>[] xTypes = m.getExceptionTypes();
-						
-						Parameter[] params = new Parameter[pTypes.length];
-						ClassNode[] exes = new ClassNode[xTypes.length];
-						
-						if(pTypes.length > 0) {
-							for(int i = 0; i < pTypes.length; i++) {
-								params[i] = new Parameter(new ClassNode(pTypes[i]), "p"+i); 										
-								astCode.append(pTypes[i].getName()).append(" p").append(i).append(",");
-							}
-							astCode.deleteCharAt(astCode.length()-1);
-						}
-						astCode.append(");");
-						for(int i = 0; i < xTypes.length; i++) {
-							exes[i] = new ClassNode(xTypes[i]);
-						}
-												
-						classNode.addMethod(m.getName(), m.getModifiers() & ~Modifier.ABSTRACT, new ClassNode(m.getReturnType()), params, exes, (Statement)new AstBuilder().buildFromString(astCode.toString()).get(0));
-
- */ 
