@@ -58,4 +58,9 @@ public @interface Scheduled {
 	 * Overrides the {@link #period()}/{@link #unit()} with a cron expression.
 	 */
 	String cron() default "";
+	
+	/**
+	 * Indicates if the scheduled task can be interrupted if it is running when canceled
+	 */
+	boolean interruptible() default true; 
 }

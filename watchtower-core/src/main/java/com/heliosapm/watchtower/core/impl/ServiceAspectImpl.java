@@ -12,6 +12,8 @@ import java.lang.reflect.Field;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,6 +22,8 @@ import javax.management.MalformedObjectNameException;
 import javax.management.Notification;
 import javax.management.ObjectName;
 
+import org.helios.jmx.concurrency.JMXManagedScheduler;
+import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.SystemClock;
 import org.helios.jmx.util.helpers.SystemClock.ElapsedTime;
@@ -40,6 +44,9 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 
 import com.heliosapm.watchtower.collector.CollectorState;
+import com.heliosapm.watchtower.core.CollectionExecutor;
+import com.heliosapm.watchtower.core.CollectionScheduler;
+import com.heliosapm.watchtower.core.EventExecutor;
 import com.heliosapm.watchtower.core.ServiceAspect;
 import com.heliosapm.watchtower.deployer.DeploymentBranch;
 
@@ -56,6 +63,12 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	protected final LoggerContext logCtx = (LoggerContext)LoggerFactory.getILoggerFactory();
 	/** Instance logger */
 	protected Logger log = logCtx.getLogger(getClass());
+	/** Thread pool for collection execution */
+	protected final JMXManagedThreadPool collectionThreadPool = CollectionExecutor.getCollectionExecutor();
+	/** Thread pool for notification broadcast */
+	protected final JMXManagedThreadPool notificationThreadPool = EventExecutor.getEventExecutor();
+	/** Scheduler for collection scheduling */
+	protected final JMXManagedScheduler collectionScheduler = CollectionScheduler.getCollectionScheduler();
 	
 	/** The compiled deployment script */
 	protected GroovyObject groovyObject = null;
@@ -71,12 +84,24 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	protected DeploymentBranch parent;
 	/** The service source file */
 	protected File sourceFile;
+	// ======================  Scheduling  ====================== 
+	/** The schedule handle */
+	protected final AtomicReference<ScheduledFuture<?>> scheduleHandle = new AtomicReference<ScheduledFuture<?>>(null);
+	/** The scheduling period */
+	protected long schedulePeriod = -1;
+	/** The scheduling period unit */
+	protected TimeUnit schedulePeriodUnit = null;
+	/** The scheduling period cron */
+	protected String schedulePeriodCron = null;
+	
+	
+	// ======================  Aspect Management ======================
 	/** The service aspect bit mask */
 	protected final int aspectBitMask;
 	/** A map of closures keyed by the corresponding ServiceAspect */
-	protected final Map<ServiceAspect, Closure<?>> closures = new EnumMap<ServiceAspect, Closure<?>>(ServiceAspect.class); 
+	protected final Map<ServiceAspect, Map<String, Closure<?>>> closures = new EnumMap<ServiceAspect, Map<String, Closure<?>>>(ServiceAspect.class); 
 	/** A map of annotations found on closures keyed by the corresponding ServiceAspect */
-	protected final Map<ServiceAspect, Annotation> closureAnnotations = new EnumMap<ServiceAspect, Annotation>(ServiceAspect.class); 
+	protected final Map<ServiceAspect, Map<String, Annotation>> closureAnnotations = new EnumMap<ServiceAspect, Map<String, Annotation>>(ServiceAspect.class); 
 	
 	/** This bean's ObjectName */
 	protected ObjectName objectName = null;
@@ -99,8 +124,18 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				for(Field f: fieldValues.keySet()) {
 					Annotation ann = f.getAnnotation(sa.getAnnotationType());
 					if(ann!=null) {						
-						closures.put(sa, (Closure<?>)fieldValues.get(f));
-						closureAnnotations.put(sa, ann);
+						Map<String, Closure<?>> cmap = closures.get(sa);
+						if(cmap==null) {
+							cmap = new ConcurrentHashMap<String, Closure<?>>();
+							closures.put(sa, cmap);
+						}
+						cmap.put(f.getName(), (Closure<?>)fieldValues.get(f));
+						Map<String, Annotation> amap = closureAnnotations.get(sa);
+						if(amap==null) {
+							amap = new ConcurrentHashMap<String, Annotation>();
+							closureAnnotations.put(sa, amap);
+						}
+						amap.put(f.getName(), ann);
 					}
 				}
 			}
@@ -251,12 +286,33 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @param initial The initial delay when first scheduled
 	 * @param unit The unit of the period and initial
 	 */
-	public void schedule(long period, long initial, TimeUnit unit) {}
+	public void schedule(long period, long initial, TimeUnit unit) {
+		final Closure scheduledTask = closures.get(ServiceAspect.SCHEDULED);
+		if(scheduleHandle.get()==null) {
+			
+			synchronized(scheduleHandle) {
+				if(scheduleHandle.get()==null) {
+					schedulePeriod = period;
+					schedulePeriodUnit = unit;
+					
+					
+				}
+			}
+		}
+		throw new RuntimeException("Attempt to schedule execution of bean [" + beanName + "] failed because it is already scheduled");
+	}
 	
 	/**
 	 * Stops the scheduled exection
 	 */
-	public void cancelSchedule() {}
+	public void cancelSchedule() {
+		ScheduledFuture<?> sched = scheduleHandle.getAndSet(null);
+		if(sched!=null) {
+			if(!sched.isCancelled()) {
+				sched.cancel(true);
+			}						
+		}
+	}
 	
 	/**
 	 * Returns the scheduled period

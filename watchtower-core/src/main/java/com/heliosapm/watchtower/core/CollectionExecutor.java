@@ -41,24 +41,42 @@ import com.heliosapm.watchtower.core.annotation.Propagate;
  */
 @Propagate
 public class CollectionExecutor extends JMXManagedThreadPool implements CollectionExecutorMBean {
+	/** The collection executor singleton instance */
+	private static volatile CollectionExecutor instance = null;
+	/** The collection executor singleton instance */
+	private static final Object lock = new Object();
 	
+	/**
+	 * Acquires and returns the CollectionExecutor singleton instance
+	 * @return the CollectionExecutor singleton instance
+	 */
+	public static CollectionExecutor getCollectionExecutor() {
+		if(instance==null) {
+			synchronized(lock) {
+				if(instance==null) {
+					instance = new CollectionExecutor();
+				}
+			}
+		}
+		return instance;
+	}	
 	
 	/**
 	 * Creates a new CollectionExecutor
 	 */
-	public CollectionExecutor() {		
+	private CollectionExecutor() {		
 		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + CollectionExecutor.class.getSimpleName()), CollectionExecutor.class.getSimpleName());		
 	}
 
-	/**
-	 * Creates a new CollectionExecutor
-	 * @param objectName The JMX ObjectName of the executor
-	 * @param poolName The executor pool name
-	 * @param publishJMX If true, publishes the JMX interface
-	 */
-	public CollectionExecutor(ObjectName objectName, String poolName, boolean publishJMX) {
-		super(objectName, poolName, publishJMX);
-	}
+//	/**
+//	 * Creates a new CollectionExecutor
+//	 * @param objectName The JMX ObjectName of the executor
+//	 * @param poolName The executor pool name
+//	 * @param publishJMX If true, publishes the JMX interface
+//	 */
+//	public CollectionExecutor(ObjectName objectName, String poolName, boolean publishJMX) {
+//		super(objectName, poolName, publishJMX);
+//	}
 
 
 }

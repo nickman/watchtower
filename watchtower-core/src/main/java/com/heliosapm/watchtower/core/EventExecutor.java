@@ -40,11 +40,30 @@ import com.heliosapm.watchtower.core.annotation.Propagate;
 @Qualifier("SpringEvent")
 @Propagate
 public class EventExecutor extends JMXManagedThreadPool implements EventExecutorMBean {
+	/** The event executor singleton instance */
+	private static volatile EventExecutor instance = null;
+	/** The event executor singleton instance */
+	private static final Object lock = new Object();
+	
+	/**
+	 * Acquires and returns the EventExecutor singleton instance
+	 * @return the EventExecutor singleton instance
+	 */
+	public static EventExecutor getEventExecutor() {
+		if(instance==null) {
+			synchronized(lock) {
+				if(instance==null) {
+					instance = new EventExecutor();
+				}
+			}
+		}
+		return instance;
+	}	
 
 	/**
 	 * Creates a new EventExecutor
 	 */
-	public EventExecutor() {
+	private EventExecutor() {
 		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + EventExecutor.class.getSimpleName()), EventExecutor.class.getSimpleName());
 	}
 

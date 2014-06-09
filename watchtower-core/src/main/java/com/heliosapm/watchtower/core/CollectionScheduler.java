@@ -41,12 +41,30 @@ import com.heliosapm.watchtower.core.annotation.Propagate;
 @EnableAutoConfiguration
 @Propagate
 public class CollectionScheduler extends JMXManagedScheduler implements CollectionSchedulerMBean {
-
+	/** The collection scheduler singleton instance */
+	private static volatile CollectionScheduler instance = null;
+	/** The collection scheduler singleton instance */
+	private static final Object lock = new Object();
+	
+	/**
+	 * Acquires and returns the CollectionScheduler singleton instance
+	 * @return the CollectionScheduler singleton instance
+	 */
+	public static CollectionScheduler getCollectionScheduler() {
+		if(instance==null) {
+			synchronized(lock) {
+				if(instance==null) {
+					instance = new CollectionScheduler();
+				}
+			}
+		}
+		return instance;
+	}
 	
 	/**
 	 * Creates a new CollectionScheduler
 	 */
-	public CollectionScheduler() {		
+	private CollectionScheduler() {		
 		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + CollectionScheduler.class.getSimpleName()), CollectionScheduler.class.getSimpleName());
 	}
 

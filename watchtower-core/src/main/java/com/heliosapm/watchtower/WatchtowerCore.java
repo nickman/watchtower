@@ -33,11 +33,14 @@ import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.management.ObjectName;
 
+import org.helios.jmx.concurrency.JMXManagedScheduler;
 import org.helios.jmx.concurrency.JMXManagedThreadPool;
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ApplicationListener;
@@ -52,6 +55,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.heliosapm.watchtower.core.CollectionExecutor;
 import com.heliosapm.watchtower.core.CollectionScheduler;
 import com.heliosapm.watchtower.core.EventExecutor;
+import com.heliosapm.watchtower.deployer.BeanDefinitionResource;
 import com.heliosapm.watchtower.deployer.DeploymentWatchService;
 import com.heliosapm.watchtower.jmx.server.JMXMPServer;
 
@@ -101,12 +105,12 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 			return "WatchtowerCore.xml";
 		}
 	};
-	/** Thread pool for async deployment tasks */
-	protected JMXManagedThreadPool deploymentThreadPool = null;
 	/** Thread pool for collection execution */
-	protected JMXManagedThreadPool collectionThreadPool = null;
+	protected final JMXManagedThreadPool collectionThreadPool = CollectionExecutor.getCollectionExecutor();
 	/** Thread pool for notification broadcast */
-	protected JMXManagedThreadPool notificationThreadPool = null;
+	protected final JMXManagedThreadPool notificationThreadPool = EventExecutor.getEventExecutor();
+	/** Scheduler for collection scheduling */
+	protected final JMXManagedScheduler collectionScheduler = CollectionScheduler.getCollectionScheduler();
 	
 	
 	/**
@@ -137,7 +141,16 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 	 */
 	public void onApplicationEvent(ContextRefreshedEvent event) {
 		if(event.getApplicationContext()!=appCtx) return;
-		WatchtowerApplication children = new WatchtowerApplication(JMXMPServer.class, CollectionScheduler.class, CollectionExecutor.class, EventExecutor.class, fileWatcherXml);
+		BeanDefinition collectionSchedulerDef = BeanDefinitionBuilder.genericBeanDefinition(CollectionScheduler.class.getName()).setFactoryMethod("getCollectionScheduler").getBeanDefinition();
+		BeanDefinition collectionExecutorDef = BeanDefinitionBuilder.genericBeanDefinition(CollectionExecutor.class.getName()).setFactoryMethod("getCollectionExecutor").getBeanDefinition();
+		BeanDefinition eventExecutorDef = BeanDefinitionBuilder.genericBeanDefinition(EventExecutor.class.getName()).setFactoryMethod("getEventExecutor").getBeanDefinition();
+		//WatchtowerApplication children = new WatchtowerApplication(JMXMPServer.class, CollectionScheduler.class, CollectionExecutor.class, EventExecutor.class, fileWatcherXml);
+		WatchtowerApplication children = new WatchtowerApplication(
+				JMXMPServer.class, 
+				fileWatcherXml);
+		children.addSources(new BeanDefinitionResource(collectionSchedulerDef, null, "collectionScheduler"),
+							new BeanDefinitionResource(collectionSchedulerDef, null, "collectionExecutor"),
+							new BeanDefinitionResource(collectionSchedulerDef, null, "eventExecutor"));
 		children.setShowBanner(false);
 		children.setWebEnvironment(false);
 		children.setParent(appCtx);
@@ -269,6 +282,30 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 	public void handleNotification(Notification notification, Object handback) {
 		// TODO Auto-generated method stub
 		//com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=		
+	}
+
+	/**
+	 * Returns the core shared collection execution thread pool
+	 * @return the collectionThreadPool
+	 */
+	public JMXManagedThreadPool getCollectionExecutor() {
+		return collectionThreadPool;
+	}
+
+	/**
+	 * Returns the core shared notification execution thread pool
+	 * @return the notificationThreadPool
+	 */
+	public JMXManagedThreadPool getNotificationExecutor() {
+		return notificationThreadPool;
+	}
+
+	/**
+	 * Returns the core shared collection scheduler
+	 * @return the collectionScheduler
+	 */
+	public JMXManagedScheduler getCollectionScheduler() {
+		return collectionScheduler;
 	}
 	
 	

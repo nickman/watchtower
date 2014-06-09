@@ -9,10 +9,10 @@
  ==============  NOTES ==============
  
  TODO:
- Multi method iface compilation
+ Multi method iface compilation :: DONE
  Inherrit ctors
  Check parent class before assigning
- Source caching
+ Source caching :: DONE
  Injections:
  	multi-annotation instances
  	set/get props on ServiceAspectImpl instance GroovyObject
