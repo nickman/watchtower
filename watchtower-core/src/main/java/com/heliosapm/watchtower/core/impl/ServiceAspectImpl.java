@@ -7,6 +7,8 @@ import groovy.lang.Closure;
 import groovy.lang.GroovyObject;
 
 import java.io.File;
+import java.io.ObjectStreamException;
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.EnumMap;
@@ -85,14 +87,8 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	/** The service source file */
 	protected File sourceFile;
 	// ======================  Scheduling  ====================== 
-	/** The schedule handle */
-	protected final AtomicReference<ScheduledFuture<?>> scheduleHandle = new AtomicReference<ScheduledFuture<?>>(null);
-	/** The scheduling period */
-	protected long schedulePeriod = -1;
-	/** The scheduling period unit */
-	protected TimeUnit schedulePeriodUnit = null;
-	/** The scheduling period cron */
-	protected String schedulePeriodCron = null;
+	/** A map of schedle handles keyed by the closure name that was annotated within a map keyed by the corresponding ServiceAspect */
+	protected final Map<String, ScheduledClosure<?>> scheduleHandles = new ConcurrentHashMap<String, ScheduledClosure<?>>(); 
 	
 	
 	// ======================  Aspect Management ======================
@@ -111,6 +107,69 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	public ServiceAspectImpl() {
 		aspectBitMask = ServiceAspect.computeBitMask(getClass());		
+	}
+	
+	/**
+	 * <p>Title: ScheduledClosure</p>
+	 * <p>Description: Wraps a scheduled closure</p> 
+	 * <p>Company: Helios Development Group LLC</p>
+	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
+	 * <p><code>com.heliosapm.watchtower.core.impl.ServiceAspectImpl.ScheduledClosure</code></p>
+	 * @param <T> The return type of the scheduled closure
+	 */
+	static class ScheduledClosure<T> implements Serializable {
+		/**  */
+		private static final long serialVersionUID = 3311828463751427076L;
+		/** The closure to be invoked on a schedule */
+		Closure<T> closure;
+		/** The schedule handle */
+		ScheduledFuture<?> scheduleHandle = null;
+		/** The scheduling period */
+		long schedulePeriod = -1;
+		/** The scheduling period unit */
+		TimeUnit schedulePeriodUnit = null;
+		/** The scheduling period cron */
+		String schedulePeriodCron = null;
+		/** The field name of the closure */
+		String closureName;
+		
+		/**
+		 * Creates a new ScheduledClosure
+		 * @param closureName The closure name (the name of the field the closure was declared in)
+		 * @param closure The closure instance to schedule
+		 * @param schedulePeriod The scheduling period
+		 * @param schedulePeriodUnit The scheduling period unit
+		 */
+		ScheduledClosure(String closureName, Closure<T> closure, long schedulePeriod, TimeUnit schedulePeriodUnit) {
+			this.closureName = closureName;
+			this.closure = closure;
+			this.schedulePeriod = schedulePeriod;
+			this.schedulePeriodUnit = schedulePeriodUnit;
+		}
+		
+		/**
+		 * Creates a new ScheduledClosure
+		 * @param closureName The closure name (the name of the field the closure was declared in)
+		 * @param closure The closure instance to schedule
+		 * @param schedulePeriodCron The scheduling period cron expression
+		 */
+		ScheduledClosure(String closureName, Closure<T> closure, String schedulePeriodCron) {
+			this.closureName = closureName;
+			this.closure = closure;
+			this.schedulePeriodCron = schedulePeriodCron;			
+		}
+		
+		
+		/**
+		 * Replaces this object with a descriptive string when serialized
+		 * @return a descriptive string
+		 * @throws ObjectStreamException thrown on errors writing to the output stream
+		 */
+		Object writeReplace() throws ObjectStreamException {
+			return closureName + ":[" + (schedulePeriodCron!=null ? schedulePeriodCron : (schedulePeriod + "/" + schedulePeriodUnit) + "]");
+		}
+		
+		
 	}
 	
 	/**
@@ -236,30 +295,32 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			started.set(false);
 		}		
 	}
-	
+	 	
 	/**
 	 * To be implemented by concrete classes that have a specific start operation
 	 * @throws Exception thrown if startup fails
 	 */
 	protected void doStart() throws Exception {
-		Closure<?> closure = closures.get(ServiceAspect.STARTER);
-		if(closure==null) {
-			log.warn("No closure found for ServiceAspect.STARTER");
-			return;
+		for(Map.Entry<String, Closure<?>> entry: closures.get(ServiceAspect.STARTER).entrySet()) {
+			try {
+				entry.getValue().call();
+			} catch (Exception ex) {
+				log.error("Failed to execute @Start aspect named [" + entry.getKey() + "]", ex);
+			}
 		}
-		closure.call();
 	}
 	
 	/**
 	 * To be implemented by concrete classes that have a specific stop operation
 	 */
 	protected void doStop(){
-		Closure<?> closure = closures.get(ServiceAspect.STOPPER);
-		if(closure==null) {
-			log.warn("No closure found for ServiceAspect.STOPPER");
-			return;
-		}
-		closure.call();		
+		for(Map.Entry<String, Closure<?>> entry: closures.get(ServiceAspect.STOPPER).entrySet()) {
+			try {
+				entry.getValue().call();
+			} catch (Exception ex) {
+				log.error("Failed to execute @Stop aspect named [" + entry.getKey() + "]", ex);
+			}
+		}		
 	}
 	
 	/**
@@ -280,37 +341,39 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	public CollectionResult collect() { return null; }
 	
-	/**
-	 * Schedules the task for repeating execution on the defined period after the defined initial period 
-	 * @param period The fixed delay of the executions
-	 * @param initial The initial delay when first scheduled
-	 * @param unit The unit of the period and initial
-	 */
-	public void schedule(long period, long initial, TimeUnit unit) {
-		final Closure scheduledTask = closures.get(ServiceAspect.SCHEDULED);
-		if(scheduleHandle.get()==null) {
-			
-			synchronized(scheduleHandle) {
-				if(scheduleHandle.get()==null) {
-					schedulePeriod = period;
-					schedulePeriodUnit = unit;
-					
-					
-				}
-			}
-		}
-		throw new RuntimeException("Attempt to schedule execution of bean [" + beanName + "] failed because it is already scheduled");
-	}
+//	/**
+//	 * Schedules the task for repeating execution on the defined period after the defined initial period 
+//	 * @param period The fixed delay of the executions
+//	 * @param initial The initial delay when first scheduled
+//	 * @param unit The unit of the period and initial
+//	 */
+//	public void schedule(Runnable task, long period, long initial, TimeUnit unit) {
+////		final Closure scheduledTask = closures.get(ServiceAspect.SCHEDULED);
+//		if(scheduleHandle.get()==null) {
+//			
+//			synchronized(scheduleHandle) {
+//				if(scheduleHandle.get()==null) {
+//					schedulePeriod = period;
+//					schedulePeriodUnit = unit;
+//					
+//					
+//				}
+//			}
+//		}
+//		throw new RuntimeException("Attempt to schedule execution of bean [" + beanName + "] failed because it is already scheduled");
+//	}
 	
 	/**
-	 * Stops the scheduled exection
+	 * Stops the named scheduled exection
+	 * @param name The name of the closure to cancel the schedule for
 	 */
-	public void cancelSchedule() {
-		ScheduledFuture<?> sched = scheduleHandle.getAndSet(null);
-		if(sched!=null) {
-			if(!sched.isCancelled()) {
-				sched.cancel(true);
+	public void cancelSchedule(String name) {
+		ScheduledClosure<?> sched = scheduleHandles.get(name);
+		if(sched!=null && sched.scheduleHandle!=null) {
+			if(!sched.scheduleHandle.isCancelled()) {
+				sched.scheduleHandle.cancel(true);				
 			}						
+			sched.scheduleHandle = null;
 		}
 	}
 	
