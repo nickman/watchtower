@@ -85,12 +85,17 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 				if(annClass!=null) {
 					ServiceAspect sa = ServiceAspect.getAspectForAnnotation(annClass);
 					if(sa!=null) {
-						 
-						classNode.addInterface(sa.getIfaceNode());
-						for(MethodNode mn: buildMethodNodes(sa.getBoundInterface())) {
-							classNode.addMethod(mn);
+						try {
+							classNode.addInterface(sa.getIfaceNode());
+							for(MethodNode mn: buildMethodNodes(sa.getBoundInterface())) {
+								classNode.addMethod(mn);
+							}
+							b.append("\n\t").append(sa.getBoundInterface().getSimpleName());
+						} catch (Exception ex) {
+							String msg = String.format("Failed to process interface overlay on [%s] for [%s]", classNode, sa.getIfaceNode());
+							log.error(msg, ex);
+							throw new RuntimeException(msg, ex);
 						}
-						b.append("\n\t").append(sa.getBoundInterface().getSimpleName());
 					}
 				}
 			}
@@ -105,20 +110,42 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	 * @return an array of method nodes
 	 */
 	protected MethodNode[] buildMethodNodes(Class<?> clazz) {
+		ClassNode classNode = new ClassNode(clazz);
 		Method[] methods = clazz.getDeclaredMethods();
 		List<MethodNode> methodNodes = new ArrayList<MethodNode>(methods.length);
 		for(Method m: methods) {
-			methodNodes.add(buildMethodNode(m));
+			Class<?>[] paramTypes = m.getParameterTypes();
+			Parameter[] paramNodes = new Parameter[paramTypes.length];
+			for(int i = 0; i < paramTypes.length; i++) {
+				paramNodes[i] = new Parameter(ClassHelper.make(paramTypes[i]), "p" + i);
+			}
+			MethodNode methodNode = classNode.getMethod(m.getName(), paramNodes);
+			methodNodes.add(buildMethodNode(m, methodNode));
 		}
 		return methodNodes.toArray(new MethodNode[methods.length]);
 	}
 	
+/*
+ * org.codehaus.groovy.control.MultipleCompilationErrorsException: startup failed:
+	/home/nwhitehead/.watchtower/deploy/foo-bar2/LocalStatsCollector.groovy: -1: 
+	A transform used a generics containing ClassNode 
+	com.heliosapm.watchtower.core.impl.ServiceAspectImpl$ScheduledClosure <T extends java.lang.Object -> java.lang.Object> 
+	for the method public [Lcom.heliosapm.watchtower.core.impl.ServiceAspectImpl$ScheduledClosure; 
+	getScheduledTasks()  { ... } directly. 
+	You are not supposed to do this. 
+	Please create a new ClassNode referring to the old ClassNode and use the new ClassNode instead of the old one. 
+	Otherwise the compiler will create wrong descriptors and a potential NullPointerException in TypeResolver in the OpenJDK. If this is not your own doing, please report this bug to the writer of the transform.
+ @ line -1, column -1.
+1 error	
+ */
+	
 	/**
 	 * Builds a method node that implements the passed method
 	 * @param m The method to build the method node for
+	 * @param methodNode The groovy ast method node
 	 * @return the method node
 	 */
-	protected MethodNode buildMethodNode(Method m) {
+	protected MethodNode buildMethodNode(Method m, MethodNode methodNode) {
 		Class<?>[] pTypes = m.getParameterTypes();
 		Class<?>[] xTypes = m.getExceptionTypes();
 
@@ -137,7 +164,7 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 					}
 					if(pTypes.length > 0) {
 						for(int i = 0; i < pTypes.length; i++) {
-							astCode.append(pTypes[i].getName()).append(" p").append(i).append(",");
+							astCode.append(" p").append(i).append(",");
 						}
 						astCode.deleteCharAt(astCode.length()-1);
 					}
@@ -146,6 +173,7 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 						astCode.append("return;");
 					}						
 					source = astCode.toString();
+					log.info("\n\tCaching Groovy Source for Service Aspect [{}]\n[{}]", m.toGenericString(), source);
 					sourceCache.put(m, source);
 				}
 			}

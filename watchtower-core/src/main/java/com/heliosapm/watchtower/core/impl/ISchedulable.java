@@ -129,10 +129,10 @@ public interface ISchedulable extends IServiceAspect {
 	public String getCron(String name);
 	
 
-	/**
-	 * Returns a sumary of the scehduled tasks
-	 * @return an array of scheduled closure objects
-	 */
-	@ManagedAttribute(description="An array of scheduled task objects")
-	public ScheduledClosure<?>[] getScheduledTasks();
+//	/**
+//	 * Returns a sumary of the scehduled tasks
+//	 * @return an array of scheduled closure objects
+//	 */
+//	@ManagedAttribute(description="An array of scheduled task objects")
+//	public ScheduledClosure[] getScheduledTasks();
 }

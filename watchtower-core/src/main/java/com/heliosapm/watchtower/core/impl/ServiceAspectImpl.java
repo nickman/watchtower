@@ -39,9 +39,6 @@ import org.springframework.beans.factory.support.BeanNameGenerator;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedOperation;
-import org.springframework.jmx.export.annotation.ManagedOperationParameter;
-import org.springframework.jmx.export.annotation.ManagedOperationParameters;
 import org.springframework.jmx.export.annotation.ManagedResource;
 import org.springframework.jmx.export.naming.SelfNaming;
 
@@ -55,6 +52,7 @@ import com.heliosapm.watchtower.core.CollectionScheduler;
 import com.heliosapm.watchtower.core.EventExecutor;
 import com.heliosapm.watchtower.core.ServiceAspect;
 import com.heliosapm.watchtower.deployer.DeploymentBranch;
+import com.heliosapm.watchtower.groovy.annotation.Scheduled;
 
 /**
  * <p>Title: ServiceAspectImpl</p>
@@ -129,7 +127,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		/** Thread pool for notification broadcast */
 		protected final JMXManagedThreadPool notificationThreadPool = EventExecutor.getEventExecutor();
 		/** Scheduler for collection scheduling */
-		protected final JMXManagedScheduler collectionScheduler = CollectionScheduler.getCollectionScheduler();
+		protected final CollectionScheduler collectionScheduler = CollectionScheduler.getCollectionScheduler();
 		/** static class logger */
 		protected static final Logger log = logCtx.getLogger(ScheduledClosure.class);
 
@@ -167,6 +165,26 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		}
 		
 		/**
+		 * Creates a new ScheduledClosure
+		 * @param closureName The closure name (the name of the field the closure was declared in)
+		 * @param closure The closure instance to schedule
+		 * @param scheduledAnnotation The @Scheduled annotation providing the scheduling details
+		 */
+		ScheduledClosure(String closureName, Closure<T> closure, Scheduled scheduledAnnotation) {
+			this.closureName = closureName;
+			this.closure = closure;
+			if(scheduledAnnotation.cron().trim().isEmpty()) {
+				this.schedulePeriod = scheduledAnnotation.period();
+				this.schedulePeriodUnit = scheduledAnnotation.unit();
+				this.initialDelay = scheduledAnnotation.initialDelay();
+				collectionScheduler.scheduleWithFixedDelay(this, initialDelay, schedulePeriod, schedulePeriodUnit);				
+			} else {
+				this.schedulePeriodCron = scheduledAnnotation.cron();
+				collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
+			}			
+		}
+		
+		/**
 		 * Cancels the schedule
 		 */
 		void cancel() {
@@ -185,7 +203,8 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		ScheduledClosure(String closureName, Closure<T> closure, String schedulePeriodCron) {
 			this.closureName = closureName;
 			this.closure = closure;
-			this.schedulePeriodCron = schedulePeriodCron;			
+			this.schedulePeriodCron = schedulePeriodCron;	
+			collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
 		}
 		
 		
@@ -198,10 +217,21 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			return closureName + ":[" + (schedulePeriodCron!=null ? schedulePeriodCron : (schedulePeriod + "/" + schedulePeriodUnit) + "]");
 		}
 
+		/**
+		 * {@inheritDoc}
+		 * @see java.util.concurrent.Callable#call()
+		 */
 		@Override
 		public T call() throws Exception {
-			// TODO: Someone needs to examine the result of the execution
-			return lastResult.get();
+			if(log.isDebugEnabled()) log.debug("Scheduled Execution of [{}]", this);
+			try {
+				T result = closure.call();
+				lastResult.set(result);
+				return result;
+			} catch (Throwable t) {
+				log.error("Scheduled Execution of task [{}] failed", t);
+				throw new Exception("Scheduled Execution of task [{}] failed", t);
+			}
 		}
 
 		/**
@@ -286,6 +316,20 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				throw new RuntimeException("Start failed", ex);
 			}
 		}
+		if(ServiceAspect.SCHEDULED.isEnabled(aspectBitMask)) {
+			try {
+				Map<String, Closure<?>> cmap = closures.get(ServiceAspect.SCHEDULED);
+				Map<String, Annotation> amap = closureAnnotations.get(ServiceAspect.SCHEDULED);
+				for(Map.Entry<String, Closure<?>> entry: cmap.entrySet()) {
+					Scheduled scheduledAnnotation = (Scheduled)amap.get(entry.getKey());
+					ScheduledClosure<?> sc = new ScheduledClosure<>(entry.getKey(), entry.getValue(), scheduledAnnotation);
+					scheduleHandles.put(entry.getKey(), sc);					
+				}
+			} catch (Exception ex) {
+				throw new RuntimeException("Start failed", ex);
+			}
+		}
+		
 	}
 	
 	/**
@@ -400,6 +444,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @param initial The initial delay when first scheduled
 	 * @param unit The unit of the period and initial
 	 */
+	@SuppressWarnings("unchecked")
 	public void schedule(String name, long period, long initial, TimeUnit unit) {
 		if(name==null || name.trim().isEmpty()) throw new IllegalArgumentException("The passed name was null or empty");
 		if(unit==null) throw new IllegalArgumentException("The passed unit was null or empty");
@@ -410,109 +455,118 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			synchronized(scheduleHandles) {
 				sc = scheduleHandles.get(name);
 				if(sc==null) {
-					sc = new ScheduledClosure<?>(name, closure, period, unit);
+					sc = new ScheduledClosure(name, closure, period, initial, unit);
+					scheduleHandles.put(name, sc);
 				}
 			}
 		}
 	}
-
+	
 	/**
 	 * Schedules the task for repeating execution on the defined period after the defined initial period 
 	 * @param name The name of the closure to schedule
 	 * @param period The fixed delay of the executions
 	 * @param initial The initial delay when first scheduled
-	 * @param unit The unit of the period and initial
+	 * @param unit The name of the unit of the period and initial
 	 */
-	@ManagedOperation(description="Schedules the task for repeating execution on the defined period after the defined initial period")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the closure to schedule"),
-		@ManagedOperationParameter(name="period", description="The fixed delay of the executions"),
-		@ManagedOperationParameter(name="initial", description="The initial delay when first scheduled"),
-		@ManagedOperationParameter(name="unit", description="The unit of the period and initial")
-	})
-	public void schedule(String name, long period, long initial, String unit);
-	
+	public void schedule(String name, long period, long initial, String unit) {		
+		if(unit==null) throw new IllegalArgumentException("The passed unit was null or empty");
+		schedule(name, period, initial, TimeUnit.valueOf(unit.trim().toUpperCase())); 
+	}	
+
 	/**
 	 * Schedules the task for repeating execution based on the passed cron expression
 	 * @param name The name of the closure to schedule
 	 * @param cron The cron expression defining the execution schedule
 	 */
-	@ManagedOperation(description="Schedules the task for repeating execution on the defined period after the defined initial period")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the closure to schedule"),
-		@ManagedOperationParameter(name="cron", description="The cron expression defining the execution schedule")
-	})
-	public void schedule(String name, String cron);
+	public void schedule(String name, String cron) {
+		if(name==null || name.trim().isEmpty()) throw new IllegalArgumentException("The passed name was null or empty");
+		Closure<?> closure  = closures.get(ServiceAspect.SCHEDULED).get(name);
+		if(closure==null) throw new IllegalArgumentException("No closure mapped to name [" + name + "]");
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc==null) {
+			synchronized(scheduleHandles) {
+				sc = scheduleHandles.get(name);
+				if(sc==null) {
+					sc = new ScheduledClosure(name, closure, cron);
+					scheduleHandles.put(name, sc);
+				}
+			}
+		}
+		
+	}
 	
 	/**
 	 * Returns the names of the closures annotated for scheduled execution
 	 * @return an array of closure names
 	 */
-	@ManagedAttribute(description="The names of the closures annotated for scheduled execution")
-	public String[] getScheduledNames();
+	public String[] getScheduledNames() {
+		return scheduleHandles.keySet().toArray(new String[0]);
+	}
 	
 	/**
 	 * Stops the scheduled exection
 	 * @param name The name of the scheduled task to cancel
 	 */
-	@ManagedOperation(description="Stops the named scheduled exection")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the scheduled closure to cancel")
-	})	
-	public void cancelSchedule(String name);
+	public void cancelSchedule(String name) {
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc!=null) sc.cancel();
+	}
 	
 	/**
 	 * Returns the scheduled period
 	 * @param name The name of the scheduled task to get the period for
-	 * @return the scheduled period
+	 * @return the scheduled period. -1 means WTF or that the task is a cron task
 	 */
-	@ManagedOperation(description="The scheduled period")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the scheduled closure to get the period for")
-	})		
-	public long getPeriod(String name);
+	public long getPeriod(String name) {
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc!=null) return sc.schedulePeriod;
+		return -1;
+	}
 
 	/**
 	 * Returns the scheduled initial delay
 	 * @param name The name of the scheduled task to get the initial delay for
-	 * @return the scheduled initial delay
+	 * @return the scheduled initial delay. -1 means WTF or that the task is a cron task
 	 */
-	@ManagedAttribute(description="The scheduled initial delay")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the scheduled closure to get the period for")
-	})			
-	public long getInitial(String name);
+	public long getInitial(String name) {
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc!=null) return sc.initialDelay;
+		return -1;
+		
+	}
 	
 	
 	/**
 	 * Returns the schedule initial and period unit
 	 * @param name The name of the scheduled task to get the initial delay for
-	 * @return the schedule initial and period unit
+	 * @return the schedule initial and period unit. null means WTF or that the task is a cron task
 	 */
-	@ManagedOperation(description="The schedule initial and period unit")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the scheduled closure to get the unit for")
-	})				
-	public TimeUnit getUnit(String name);
+	public TimeUnit getUnit(String name) {
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc!=null) return sc.schedulePeriodUnit;
+		return null;
+	}
 	
 	/**
 	 * Returns the schedule cron expression
 	 * @param name The name of the scheduled task to get the cron expression for
-	 * @return the scheduled task cron expression
+	 * @return the scheduled task cron expression. null means WTF or that the task is a not cron task
 	 */
-	@ManagedOperation(description="The schedule cron expression")
-	@ManagedOperationParameters({
-		@ManagedOperationParameter(name="name", description="The name of the scheduled closure to get the unit for")
-	})				
-	public String getCron(String name);
+	public String getCron(String name) {
+		ScheduledClosure<?> sc = scheduleHandles.get(name);
+		if(sc!=null) return sc.schedulePeriodCron;
+		return null;		
+	}
 	
 
 	/**
 	 * Returns a sumary of the scehduled tasks
 	 * @return an array of scheduled closure objects
 	 */
-	@ManagedAttribute(description="An array of scheduled task objects")
-	public ScheduledClosure<?>[] getScheduledTasks();
+	public ScheduledClosure<?>[] getScheduledTasks() {
+		return scheduleHandles.values().toArray(new ScheduledClosure[0]);
+	}
 	
 
 	// ==========================================================================================

@@ -31,6 +31,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.helios.jmx.concurrency.JMXManagedScheduler;
@@ -47,6 +48,7 @@ import com.heliosapm.watchtower.core.annotation.Propagate;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.core.CollectionScheduler</code></p>
  * FIXME: expose config with spring annotations
+ * FIXME: Push cron expression out to different class and conditionally load if quartz is available
  */
 @EnableAutoConfiguration
 @Propagate
@@ -78,14 +80,28 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		super(JMXHelper.objectName("com.heliosapm.watchtower.core.threadpools:service=ThreadPool,name=" + CollectionScheduler.class.getSimpleName()), CollectionScheduler.class.getSimpleName());
 	}
 	
+	/**
+	 * Schedules the passed task for execution in accordance with the passed cron expression
+	 * @param command The task to schedule
+	 * @param cron The cron expression. (See {@link CronExpression})
+	 * @return a handle to the schedule
+	 */
 	public <T> ScheduledFuture<T> scheduleWithCron(final Callable<T> command, String cron) {
 		try {
-			return new CronScheduledFuture(command, new CronExpression(cron));
+			return new CronScheduledFuture<T>(command, new CronExpression(cron));
 		} catch (Exception ex) {
 			throw new RuntimeException("Failed to schedule task [" + command + "] with cron expression [" + cron + "]", ex);
 		}
 	}
 	
+	/**
+	 * <p>Title: CronScheduledFuture</p>
+	 * <p>Description: A scheduled future implementation for a task scheduled by a cron expression</p> 
+	 * <p>Company: Helios Development Group LLC</p>
+	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
+	 * <p><code>com.heliosapm.watchtower.core.CronScheduledFuture</code></p>
+	 * @param <T> The assumed type of the callable and scheduled future return type
+	 */
 	class CronScheduledFuture<T> implements Callable<T>, ScheduledFuture<T> {
 		/** The scheduled task */
 		protected final Callable<T> command;
@@ -93,7 +109,8 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		protected final CronExpression cex;
 		/** The scheduled thingy for the next scheduled execution */
 		protected final AtomicReference<ScheduledFuture<T>> nextExecutionFuture = new AtomicReference<ScheduledFuture<T>>(null);
-		
+		/** Indicates if the schedule has been canceled */
+		protected final AtomicBoolean cancelled = new AtomicBoolean(false);
 		/**
 		 * Creates a new CronScheduleFuture
 		 * @param command The repeating command
@@ -102,15 +119,22 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		public CronScheduledFuture(Callable<T> command, CronExpression cex) {
 			this.command = command;
 			this.cex = cex;
-			nextExecutionFuture.set(schedule(this, nextExecutionTime(), TimeUnit.MILLISECONDS));
+			Long nextExec = nextExecutionTime();
+			if(nextExec==null) {
+				cancel(true);
+				return;
+			}
+			nextExecutionFuture.set(schedule(this, nextExec, TimeUnit.MILLISECONDS));
 		}
 		
 		/**
-		 * Returns the next valid execution time after now
-		 * @return the next valid execution time 
+		 * Returns the next valid execution time in ms.UTC after now
+		 * @return the next valid execution time or null if there isn't one
 		 */
-		public long nextExecutionTime() {
-			return cex.getNextValidTimeAfter(new Date()).getTime();
+		public Long nextExecutionTime() {
+			Date nextExec = cex.getNextValidTimeAfter(new Date());
+			if(nextExec==null) return null;
+			return nextExec.getTime();
 		}
 
 		/**
@@ -120,6 +144,18 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		@Override
 		public T call() throws Exception {
 			T result = command.call();
+			if(!cancelled.get()) {
+				synchronized(cancelled) {
+					if(!cancelled.get()) {
+						Long nextExec = nextExecutionTime();
+						if(nextExec==null) {
+							cancel(true);							
+						} else {
+							nextExecutionFuture.set(schedule(this, nextExec, TimeUnit.MILLISECONDS));
+						}												
+					}
+				}
+			}
 			return result;
 		}
 
@@ -136,7 +172,10 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 * @param nextExecutionFuture the nextExecutionFuture to set
 		 */
 		public void setNextExecutionFuture(ScheduledFuture<T> nextExecutionFuture) {
-			this.nextExecutionFuture.set(nextExecutionFuture);
+			ScheduledFuture<T> prior = this.nextExecutionFuture.getAndSet(nextExecutionFuture);
+			if(prior!=null) {
+				prior.cancel(true);
+			}
 		}
 
 		/**
@@ -145,7 +184,9 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public long getDelay(TimeUnit unit) {
-			return nextExecutionFuture.get().getDelay(unit);
+			ScheduledFuture<T> sf = nextExecutionFuture.get();
+			if(sf==null) throw new RuntimeException("No scheduled task in state", new Throwable());						
+			return sf.getDelay(unit);
 		}
 
 		/**
@@ -154,7 +195,9 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public int compareTo(Delayed delayed) {
-			return nextExecutionFuture.get().compareTo(delayed);
+			ScheduledFuture<T> sf = nextExecutionFuture.get();
+			if(sf==null) throw new RuntimeException("No scheduled task in state", new Throwable());			
+			return sf.compareTo(delayed);
 		}
 
 		/**
@@ -163,9 +206,13 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public boolean cancel(boolean mayInterruptIfRunning) {
-			boolean cancelled = nextExecutionFuture.get().cancel(mayInterruptIfRunning);
-			
-			return cancelled;
+			if(cancelled.compareAndSet(false, true)) {
+				ScheduledFuture<T> sf = nextExecutionFuture.get();
+				if(sf!=null) {
+					sf.cancel(mayInterruptIfRunning);
+				}				
+			}
+			return true;
 		}
 
 		/**
@@ -174,7 +221,7 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public boolean isCancelled() {
-			return nextExecutionFuture.get().isCancelled();
+			return cancelled.get();
 		}
 
 		/**
@@ -183,7 +230,8 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public boolean isDone() {
-			return nextExecutionFuture.get().isDone();
+			ScheduledFuture<T> sf = nextExecutionFuture.get(); 
+			return sf == null || sf.isDone();
 		}
 
 		/**
@@ -192,7 +240,9 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public T get() throws InterruptedException, ExecutionException {
-			return nextExecutionFuture.get().get();
+			ScheduledFuture<T> sf = nextExecutionFuture.get();
+			if(sf==null) throw new ExecutionException("No scheduled task in state", new Throwable());
+			return sf.get();
 		}
 
 		/**
@@ -201,7 +251,9 @@ public class CollectionScheduler extends JMXManagedScheduler implements Collecti
 		 */
 		@Override
 		public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-			return nextExecutionFuture.get().get(timeout, unit);
+			ScheduledFuture<T> sf = nextExecutionFuture.get();
+			if(sf==null) throw new ExecutionException("No scheduled task in state", new Throwable());			
+			return sf.get(timeout, unit);
 		}
 	}
 

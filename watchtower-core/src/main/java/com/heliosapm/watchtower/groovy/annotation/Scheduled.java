@@ -25,6 +25,7 @@
 package com.heliosapm.watchtower.groovy.annotation;
 
 import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.ElementType.FIELD;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -41,14 +42,20 @@ import java.util.concurrent.TimeUnit;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.watchtower.groovy.annotation.Scheduled</code></p>
  */
-@Target(value={TYPE})
+@Target(value={FIELD, TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface Scheduled {
 	/**
-	 * The default scheduling period
+	 * The scheduling period
 	 */
-	long period() default 60000;
+	long period() default 15000;
+	
+	/**
+	 * The initial delay
+	 */
+	long initialDelay() default 1000;
+	
 	/**
 	 * The default scheduling period unit
 	 */

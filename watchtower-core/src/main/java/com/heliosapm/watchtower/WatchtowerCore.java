@@ -149,8 +149,8 @@ public class WatchtowerCore implements ApplicationContextAware, SelfNaming, Appl
 				JMXMPServer.class, 
 				fileWatcherXml);
 		children.addSources(new BeanDefinitionResource(collectionSchedulerDef, null, "collectionScheduler"),
-							new BeanDefinitionResource(collectionSchedulerDef, null, "collectionExecutor"),
-							new BeanDefinitionResource(collectionSchedulerDef, null, "eventExecutor"));
+							new BeanDefinitionResource(collectionExecutorDef, null, "collectionExecutor"),
+							new BeanDefinitionResource(eventExecutorDef, null, "eventExecutor"));
 		children.setShowBanner(false);
 		children.setWebEnvironment(false);
 		children.setParent(appCtx);
