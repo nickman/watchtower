@@ -478,7 +478,7 @@ public class DeploymentWatchService extends ServerComponentBean implements Runna
 			}
 		}
 		processingQueue.add(fe);
-		log.info("Queued File [{}] Event for [{}] and dropped [{}] older versions", eventType.name(), fe.getFileName(), removes);
+		//log.info("Queued File [{}] Event for [{}] and dropped [{}] older versions", eventType.name(), fe.getFileName(), removes);
 	}
 	
 	/**

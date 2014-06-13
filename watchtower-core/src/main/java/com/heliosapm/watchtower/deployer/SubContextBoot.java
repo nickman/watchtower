@@ -140,7 +140,9 @@ public class SubContextBoot {
 	/** The default imports */
 	public static final Set<String> DEFAULT_IMPORTS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
 			"import groovy.transform.*", "import java.util.concurrent.atomic.*", "import java.util.concurrent.*",
-			"import com.heliosapm.watchtower.groovy.annotation.*"
+			"import com.heliosapm.watchtower.groovy.annotation.*", "import javax.management.*", "import javax.management.remote.*",
+			"import org.helios.jmx.util.helpers.*"
+			
 	)));
 	
 	protected static final SuperClassOverlay SUPERCLASS_OVERLAY = new SuperClassOverlay(ServiceAspectImpl.class);
@@ -152,7 +154,7 @@ public class SubContextBoot {
 	 * @param parentBranch The optional parent deployment branch
 	 * @param objectName The optional parent ObjectName
 	 */
-	public static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch, ObjectName objectName) {
+	public synchronized static void main(final File subDeploy, ConfigurableApplicationContext parent, DeploymentBranch parentBranch, ObjectName objectName) {
 		OpenTypeEnabledURLClassLoader branchClassLoader = loadBranchLibs(subDeploy);
 		Map<String, Object> env = new HashMap<String, Object>();
 		String[] args = subDeploy.list(GROOVY_FILENAME_FILTER);
@@ -213,6 +215,7 @@ public class SubContextBoot {
 				long start = System.currentTimeMillis();
 				File gFile = new File(args[i]);
 				Class<?> gclass = gcl.parseClass(gFile);
+				LOG.info("Compiled Class [{}], CL:[{}]", gclass.getName(), gclass.getClassLoader());
 				Object instance = null;
 				try {
 					instance = gclass.newInstance();

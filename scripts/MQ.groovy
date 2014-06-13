@@ -332,7 +332,7 @@ doTopicStats = {
                 it.each() { k, v ->
                     //println
                     //println connectionId;
-                    println "\t${k}:${v}";
+                    //println "\t${k}:${v}";
                 }                         
              }
          }
@@ -358,7 +358,20 @@ try {
 //            doGetQueueMaxDepths();
 //            doQueueStats();
 //            doChannelStats();
-                doTopicStats();
+//              doTopicStats();
+               request(true, pcf, CMQCFC.MQCMD_INQUIRE_Q_MGR_STATUS, []).each() {     
+                it.each() { k, v ->                                        
+                     println "\t${k}:${v}";
+                }                         
+               }
+                request(false, pcf, CMQCFC.MQCMD_INQUIRE_TOPIC_STATUS, [(CMQC.MQCA_TOPIC_STRING):"#", (CMQCFC.MQIACF_TOPIC_STATUS_TYPE):CMQCFC.MQIACF_TOPIC_SUB]).each() {   
+                    byte[] subId = it.get(CMQCFC.MQBACF_SUB_ID);  
+                    request(true, pcf, CMQCFC.MQCMD_INQUIRE_SUB_STATUS, [(CMQCFC.MQBACF_SUB_ID):subId]).each() {     
+                        println it;
+                    }
+                }
+               
+
         } catch (e) {
             e.printStackTrace(System.err);
         } finally {

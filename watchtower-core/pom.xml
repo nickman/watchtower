@@ -58,10 +58,15 @@
 		<dependency>
 			<artifactId>jmx-core</artifactId>
 			<groupId>org.helios.jmx-tools</groupId>
-			<exclusions>
-				
+			<exclusions>				
 			</exclusions>
 		</dependency>
+		
+		<dependency>
+			<artifactId>jmx-tssh</artifactId>
+			<groupId>org.helios.jmx-tools</groupId>
+		</dependency>
+		
 
 
       <!--

@@ -89,6 +89,13 @@
 			<version>1.0-SNAPSHOT</version>
 		</dependency>
 
+		<dependency>
+			<artifactId>jmx-tssh</artifactId>
+			<groupId>org.helios.jmx-tools</groupId>
+			<version>1.0-SNAPSHOT</version>
+		</dependency>
+
+
       <!--
 	========================================
 	Netty Artifacts
