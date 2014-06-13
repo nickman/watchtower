@@ -34,23 +34,55 @@ package com.heliosapm.watchtower.collector;
 
 public enum CollectorState {
 	/** The bean is initialized but not started yet */
-	INIT,
+	INIT(true, false),
 	/** The bean is started and stable */
-	STARTED,
+	STARTING(false, false),	
+	/** The bean is started and stable */
+	STARTED(true, false),
 	/** The bean is paused */
-	PAUSED,
+	PAUSED(true, false),
+	/** The bean is stopping */
+	STOPPING(false, false),
+	
 	/** The bean is stopped */
-	STOPPED,
+	STOPPED(true, false),
+	
 	/** The bean is collecting */
-	COLLECTING,
+	COLLECTING(false, false),
 	/** The bean is broken meaning it could not be initialized or started, typically a config problem */
-	BROKEN,
+	BROKEN(true, true),
 	/** The script underlying the bean has a compile error */
-	BUST,
+	BUST(true, true),
 	/** The bean has been isolated on account of serial collection or connection errors */
-	ISOLATED,
+	ISOLATED(true, false),
 	/** The bean cannot connect to an unreliable resource (like a connection) */
-	DOWN,
+	DOWN(true, false),
 	/** The bean is in a blackout window */
-	BLACKOUT;
+	BLACKOUT(true, false);
+	
+	private CollectorState(boolean stable, boolean terminal) {
+		this.stable = stable;
+		this.terminal = terminal;
+	}
+	
+	/** Indicates the state is stable, suggesting state changes can be applied */
+	public final boolean stable;
+	/** Indicates the state is terminal and will not change */
+	public final boolean terminal;
+	
+	/**
+	 * Indicates the state is stable, suggesting state changes can be applied
+	 * @return true if stable, false otherwise
+	 */
+	public boolean isStable() {
+		return stable;
+	}
+	
+	/**
+	 * Indicates the state is terminal and will not change
+	 * @return true if terminal, false otherwise
+	 */
+	public boolean isTerminal() {
+		return terminal;
+	}
 }

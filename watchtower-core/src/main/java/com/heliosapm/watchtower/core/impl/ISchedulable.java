@@ -5,13 +5,16 @@ package com.heliosapm.watchtower.core.impl;
 
 import java.util.concurrent.TimeUnit;
 
+import javax.management.Notification;
+
 import org.springframework.jmx.export.annotation.ManagedAttribute;
+import org.springframework.jmx.export.annotation.ManagedNotification;
+import org.springframework.jmx.export.annotation.ManagedNotifications;
 import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedOperationParameter;
 import org.springframework.jmx.export.annotation.ManagedOperationParameters;
 
 import com.heliosapm.watchtower.core.IServiceAspect;
-import com.heliosapm.watchtower.core.impl.ServiceAspectImpl.ScheduledClosure;
 
 /**
  * <p>Title: ISchedulable</p>
@@ -20,7 +23,9 @@ import com.heliosapm.watchtower.core.impl.ServiceAspectImpl.ScheduledClosure;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><b><code>com.heliosapm.watchtower.core.impl.ISchedulable</code></b>
  */
-
+@ManagedNotifications({
+	@ManagedNotification(name = "javax.management.Notification", description="Notifications emitted before and after a scheduled task is executed", notificationTypes = { "helios.watchtower.schedule.pre", "helios.watchtower.schedule.post" })
+})
 public interface ISchedulable extends IServiceAspect {
 	/**
 	 * Schedules the task for repeating execution on the defined period after the defined initial period 

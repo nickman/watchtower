@@ -574,6 +574,7 @@ public class DeploymentBranch extends ServerComponentBean implements /* Deployme
 	@Override
 	public void onFileModified(File file) {
 		log.info("----> File Modified [{}]", file);
+		
 	}
 
 	/**

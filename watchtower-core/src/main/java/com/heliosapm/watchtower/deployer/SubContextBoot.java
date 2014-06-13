@@ -64,6 +64,7 @@ import org.springframework.core.io.ByteArrayResource;
 
 import com.heliosapm.watchtower.Watchtower;
 import com.heliosapm.watchtower.WatchtowerApplication;
+import com.heliosapm.watchtower.core.impl.INamed;
 import com.heliosapm.watchtower.core.impl.ServiceAspectImpl;
 import com.heliosapm.watchtower.groovy.GroovyService;
 import com.heliosapm.watchtower.groovy.ServiceAspectCompiler;
@@ -212,14 +213,21 @@ public class SubContextBoot {
 				long start = System.currentTimeMillis();
 				File gFile = new File(args[i]);
 				Class<?> gclass = gcl.parseClass(gFile);
+				Object instance = null;
 				try {
-					gclass.newInstance();
+					instance = gclass.newInstance();
 				} catch (Throwable t) {
 					throw new RuntimeException(String.format("Failed to load compiled class %s/%s", subDeploy.getAbsolutePath(), gFile.getName()), t);
 				}
+				String cname = null;
+				if(instance instanceof INamed) {
+					cname = ((INamed)instance).getScriptName();
+				} else {
+					cname = gclass.getSimpleName();
+				}
 				wapp.addSources(new BeanDefinitionResource(BeanDefinitionBuilder.genericBeanDefinition(gclass)
 //						.addPropertyValue("parent", parentBranch)
-						.addPropertyValue("objectName", JMXHelper.objectName(String.format("%s,%s=%s,bean=%s", objectName.toString(), dirPair[0], dirPair[1], gclass.getName())))
+						.addPropertyValue("objectName", JMXHelper.objectName(String.format("%s,%s=%s,bean=%s", objectName.toString(), dirPair[0], dirPair[1], cname)))
 						.addPropertyValue("sourceFile", gFile)
 //						.addConstructorArgValue(parentBranch)
 //						.addConstructorArgValue(gFile)

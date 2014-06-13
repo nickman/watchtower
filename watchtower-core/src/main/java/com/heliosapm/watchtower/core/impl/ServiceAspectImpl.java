@@ -53,6 +53,7 @@ import com.heliosapm.watchtower.core.EventExecutor;
 import com.heliosapm.watchtower.core.ServiceAspect;
 import com.heliosapm.watchtower.deployer.DeploymentBranch;
 import com.heliosapm.watchtower.groovy.annotation.Scheduled;
+import com.heliosapm.watchtower.groovy.annotation.ScriptName;
 
 /**
  * <p>Title: ServiceAspectImpl</p>
@@ -81,7 +82,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	/** The started state of this component */
 	protected final AtomicBoolean started = new AtomicBoolean(false);
 	/** The state of this component */
-	protected final AtomicReference<CollectorState> state = new AtomicReference<CollectorState>(CollectorState.INIT); 
+	protected final AtomicReference<CollectorState> collectorState = new AtomicReference<CollectorState>(CollectorState.INIT); 
 	/** The application context this bean is deployed in */
 	protected ApplicationContext applicationContext = null;
 	/** The parent deployment branch */
@@ -109,6 +110,26 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	public ServiceAspectImpl() {
 		aspectBitMask = ServiceAspect.computeBitMask(getClass());		
+		if(ServiceAspect.NAMED.isEnabled(aspectBitMask)) {
+			beanName = getClass().getAnnotation(ScriptName.class).value();
+		} else {
+			beanName = getClass().getSimpleName();
+		}
+	}
+	
+	/**
+	 * Transitions the state of this bean
+	 * @param state The new state
+	 */
+	protected void transitionState(CollectorState state) {
+		if(state==null) throw new IllegalArgumentException("The passed state was null");
+		CollectorState oldState = collectorState.getAndSet(state);
+		if(state!=oldState) {
+			log.debug("Transitioned State from [{}]--->[{}]", oldState, state);
+			// FIXME:  notif
+		}
+		
+		
 	}
 	
 	/**
@@ -161,7 +182,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			this.schedulePeriod = schedulePeriod;
 			this.schedulePeriodUnit = schedulePeriodUnit;
 			this.initialDelay = initialDelay;
-			collectionScheduler.scheduleWithFixedDelay(this, initialDelay, schedulePeriod, schedulePeriodUnit);
+			scheduleHandle = collectionScheduler.scheduleWithFixedDelay(this, initialDelay, schedulePeriod, schedulePeriodUnit);
 		}
 		
 		/**
@@ -177,10 +198,10 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				this.schedulePeriod = scheduledAnnotation.period();
 				this.schedulePeriodUnit = scheduledAnnotation.unit();
 				this.initialDelay = scheduledAnnotation.initialDelay();
-				collectionScheduler.scheduleWithFixedDelay(this, initialDelay, schedulePeriod, schedulePeriodUnit);				
+				scheduleHandle = collectionScheduler.scheduleWithFixedDelay(this, initialDelay, schedulePeriod, schedulePeriodUnit);				
 			} else {
 				this.schedulePeriodCron = scheduledAnnotation.cron();
-				collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
+				scheduleHandle = collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
 			}			
 		}
 		
@@ -204,7 +225,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			this.closureName = closureName;
 			this.closure = closure;
 			this.schedulePeriodCron = schedulePeriodCron;	
-			collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
+			scheduleHandle = collectionScheduler.scheduleWithCron(this, schedulePeriodCron);
 		}
 		
 		
@@ -307,15 +328,9 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @see org.springframework.beans.factory.InitializingBean#afterPropertiesSet()
 	 */
 	public void afterPropertiesSet() {
+		transitionState(CollectorState.STARTING);
 		groovyObject = (GroovyObject)this;
 		loadClosures();
-		if(ServiceAspect.STARTER.isEnabled(aspectBitMask)) {
-			try {
-				start();
-			} catch (Exception ex) {
-				throw new RuntimeException("Start failed", ex);
-			}
-		}
 		if(ServiceAspect.SCHEDULED.isEnabled(aspectBitMask)) {
 			try {
 				Map<String, Closure<?>> cmap = closures.get(ServiceAspect.SCHEDULED);
@@ -328,8 +343,32 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			} catch (Exception ex) {
 				throw new RuntimeException("Start failed", ex);
 			}
+		}				
+		if(ServiceAspect.STARTER.isEnabled(aspectBitMask)) {
+			try {
+				start();
+				transitionState(CollectorState.STARTED);
+			} catch (Exception ex) {
+				throw new RuntimeException("Start failed", ex);
+			}
 		}
-		
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see org.springframework.beans.factory.DisposableBean#destroy()
+	 */
+	public void destroy() {
+		//started.set(false);
+		transitionState(CollectorState.STOPPING);
+		for(ScheduledClosure<?> handle: scheduleHandles.values()) {
+			log.info("Stopping Schedule for [{}]", handle.closureName);
+			handle.cancel();
+		}
+		if(ServiceAspect.STOPPER.isEnabled(aspectBitMask)) {
+			stop();
+			transitionState(CollectorState.STOPPED);
+		}		
 	}
 	
 	/**
@@ -342,15 +381,6 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		
 	}
 	
-	/**
-	 * {@inheritDoc}
-	 * @see org.springframework.beans.factory.DisposableBean#destroy()
-	 */
-	public void destroy() {
-		if(ServiceAspect.STOPPER.isEnabled(aspectBitMask)) {
-			stop();
-		}		
-	}
 	
 	/**
 	 * Called when bean is started.
@@ -394,6 +424,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @throws Exception thrown if startup fails
 	 */
 	protected void doStart() throws Exception {
+		// FIXME:  closures is empty after start. Will need to keep it for restart.
 		for(Map.Entry<String, Closure<?>> entry: closures.get(ServiceAspect.STARTER).entrySet()) {
 			try {
 				entry.getValue().call();
@@ -414,6 +445,11 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				log.error("Failed to execute @Stop aspect named [" + entry.getKey() + "]", ex);
 			}
 		}		
+		closureAnnotations.clear();
+		closures.clear();
+		groovyObject = null;
+		scheduleHandles.clear();
+		
 	}
 	
 	/**
@@ -643,7 +679,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @return the state
 	 */
 	public CollectorState getState() {
-		return state.get();
+		return collectorState.get();
 	}
 	
 	/**
@@ -652,7 +688,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 */
 	@ManagedAttribute(description="The current state of this bean")
 	public String getStateName() {
-		return state.get().name();
+		return collectorState.get().name();
 	}
 	
 
@@ -696,7 +732,16 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 
 	@Override
 	public String generateBeanName(BeanDefinition definition, BeanDefinitionRegistry registry) {
-		return getClass().getName();
+		return beanName;
+	}
+	
+	/**
+	 * Returns the bean name which will be the simple class name defined in the script,
+	 * or the value specified in the @ScriptName annotation
+	 * @return the script name
+	 */
+	public String getScriptName() {
+		return beanName;
 	}
 
 	/**

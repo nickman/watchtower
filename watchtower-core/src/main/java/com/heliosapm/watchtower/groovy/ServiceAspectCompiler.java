@@ -7,7 +7,9 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.codehaus.groovy.ast.ASTNode;
@@ -59,6 +61,7 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 
 	public ServiceAspectCompiler() {
 		super(CompilePhase.CANONICALIZATION);
+		
 	}
 
 	/**
@@ -67,6 +70,7 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	 */
 	@Override
 	public void call(SourceUnit source, GeneratorContext context, ClassNode classNode) throws CompilationFailedException {
+		Set<ServiceAspect> appliedAspects = EnumSet.noneOf(ServiceAspect.class);
 		StringBuilder b = new StringBuilder("\n\tAdded Interfaces for class [").append(classNode).append("]");
 		for(AnnotationNode anode : classNode.getAnnotations()) {
 			Class<? extends Annotation> annClass = anode.getClassNode().getTypeClass();
@@ -84,7 +88,9 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 				Class<? extends Annotation> annClass = anode.getClassNode().getTypeClass();
 				if(annClass!=null) {
 					ServiceAspect sa = ServiceAspect.getAspectForAnnotation(annClass);
-					if(sa!=null) {
+					
+					if(sa!=null && !appliedAspects.contains(sa)) {
+						appliedAspects.add(sa);
 						try {
 							classNode.addInterface(sa.getIfaceNode());
 							for(MethodNode mn: buildMethodNodes(sa.getBoundInterface())) {
