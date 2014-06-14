@@ -29,6 +29,7 @@ import groovy.lang.GroovyClassLoader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FilenameFilter;
+import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
@@ -53,13 +54,9 @@ import org.helios.jmx.util.helpers.StringHelper;
 import org.helios.jmx.util.helpers.URLHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.config.ConstructorArgumentValues;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
-import org.springframework.beans.factory.support.GenericBeanDefinition;
-import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.boot.builder.ParentContextApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.io.ByteArrayResource;
 
 import com.heliosapm.watchtower.Watchtower;
@@ -218,6 +215,11 @@ public class SubContextBoot {
 				LOG.info("Compiled Class [{}], CL:[{}]", gclass.getName(), gclass.getClassLoader());
 				Object instance = null;
 				try {
+					StringBuilder b = new StringBuilder("\nConstructors for [").append(gclass.getName()).append("]");
+					for(Constructor<?> ctor: gclass.getDeclaredConstructors()) {
+						b.append("\n\t").append(ctor.toGenericString());
+					}
+					LOG.info(b.append("\n").toString());
 					instance = gclass.newInstance();
 				} catch (Throwable t) {
 					throw new RuntimeException(String.format("Failed to load compiled class %s/%s", subDeploy.getAbsolutePath(), gFile.getName()), t);

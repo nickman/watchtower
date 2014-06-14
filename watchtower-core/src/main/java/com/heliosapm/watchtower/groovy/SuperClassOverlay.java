@@ -63,7 +63,8 @@ public class SuperClassOverlay extends CompilationCustomizer {
 		StringBuilder b = new StringBuilder("\n\t******************\n\tCompilation Customizer Callback\n\tClass:").append(classNode.getName()).append("\n\t******************\n");
 		classNode.setSuperClass(superClass);
 		for(ConstructorNode cn: superClass.getDeclaredConstructors()) {
-			classNode.addConstructor(cn);
+			//classNode.addConstructor(new ConstructorNode());
+			//classNode.addConstructor(cn);
 		}
 		
 		log.info(b.toString());

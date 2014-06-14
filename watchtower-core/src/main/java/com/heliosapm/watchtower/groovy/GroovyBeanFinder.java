@@ -26,6 +26,7 @@ package com.heliosapm.watchtower.groovy;
 
 import java.lang.annotation.Annotation;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -35,6 +36,9 @@ import javax.management.Notification;
 import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.management.ObjectName;
+import javax.management.Query;
+import javax.management.QueryExp;
+import javax.management.StringValueExp;
 
 import org.helios.jmx.util.helpers.JMXHelper;
 import org.slf4j.Logger;
@@ -97,18 +101,11 @@ public class GroovyBeanFinder implements GroovyBeanFinderMXBean, NotificationLis
 	 * @return the named application context
 	 */
 	public ApplicationContext context(final CharSequence on) {
-		if(on==null) throw new IllegalArgumentException("The passed object name was null");		
-		try {
-			return (ApplicationContext)beanCache.get(key(on), new Callable<Object>() {
-				@Override
-				public Object call() throws Exception {					
-					return JMXHelper.getAttribute(JMXHelper.objectName(on), "Context");
-				}
-			});
-		} catch (Exception ex) {
-			throw new RuntimeException("Failed to find context named [" +  on + "]", ex);
-		}		
+		return context(JMXHelper.objectName(on));
 	}
+	
+	/** A JMX Query that narrows down matching mbeans to those that are instances of {@link DeploymentBranch} */
+	public static final QueryExp CTX_QUERY = Query.isInstanceOf(new StringValueExp(DeploymentBranch.class.getName()));
 	
 	/**
 	 * Returns the named application context
@@ -117,7 +114,17 @@ public class GroovyBeanFinder implements GroovyBeanFinderMXBean, NotificationLis
 	 */
 	public ApplicationContext context(final ObjectName on) {
 		if(on==null) throw new IllegalArgumentException("The passed object name was null");
-		return context(on.toString());
+		ObjectName[] matches = JMXHelper.query(on, CTX_QUERY);
+		if(matches.length>1) {
+			throw new RuntimeException("Expression [" + on + "] too general. Expected 1 result, got " + matches.length);
+		} else if(matches.length==0) {
+			throw new RuntimeException("No matches for expression [" + on + "]");
+		}
+		Object obj = JMXHelper.getAttribute(on, "Context");
+		if(obj==null) throw new RuntimeException("Matched expression [" + on + "] but no Context was found");
+		if(!ApplicationContext.class.isInstance(obj)) throw new RuntimeException("Matched expression [" + on + "] but object was not an ApplicationContext. Was [" + obj.getClass().getName() + "]");
+		return (ApplicationContext)obj;
+		
 	}
 	
 	

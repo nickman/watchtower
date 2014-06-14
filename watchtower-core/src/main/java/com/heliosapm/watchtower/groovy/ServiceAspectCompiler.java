@@ -3,6 +3,8 @@
  */
 package com.heliosapm.watchtower.groovy;
 
+import groovy.transform.InheritConstructors;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -51,6 +53,10 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	/** A cache of interface implementing source keyed by method */
 	protected final ConcurrentHashMap<Method, String> sourceCache = new ConcurrentHashMap<Method, String>();
 
+	/** The inherrit constructors class node */
+	protected final ClassNode inherritCtorsNode = ClassHelper.make(InheritConstructors.class);
+	/** The inherrit constructors annotation node */
+	protected final AnnotationNode inherritCtorsAnnNode = new AnnotationNode(inherritCtorsNode);
 
 	
 	/** A convenience sharable static ServiceAspectCompiler */
@@ -70,6 +76,9 @@ public class ServiceAspectCompiler extends CompilationCustomizer {
 	 */
 	@Override
 	public void call(SourceUnit source, GeneratorContext context, ClassNode classNode) throws CompilationFailedException {
+		if(classNode.getAnnotations(inherritCtorsNode).isEmpty()) {
+			classNode.addAnnotation(inherritCtorsAnnNode);
+		}
 		Set<ServiceAspect> appliedAspects = EnumSet.noneOf(ServiceAspect.class);
 		StringBuilder b = new StringBuilder("\n\tAdded Interfaces for class [").append(classNode).append("]");
 		for(AnnotationNode anode : classNode.getAnnotations()) {

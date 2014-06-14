@@ -140,7 +140,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * <p><code>com.heliosapm.watchtower.core.impl.ServiceAspectImpl.ScheduledClosure</code></p>
 	 * @param <T> The return type of the scheduled closure
 	 */
-	static class ScheduledClosure<T> implements Serializable, Runnable, Callable<T> {
+	class ScheduledClosure<T> implements Serializable, Runnable, Callable<T> {
 		/**  */
 		private static final long serialVersionUID = 3311828463751427076L;
 		/** Thread pool for collection execution */
@@ -150,7 +150,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 		/** Scheduler for collection scheduling */
 		protected final CollectionScheduler collectionScheduler = CollectionScheduler.getCollectionScheduler();
 		/** static class logger */
-		protected static final Logger log = logCtx.getLogger(ScheduledClosure.class);
+		protected final Logger log = logCtx.getLogger(ScheduledClosure.class);
 
 		/** The closure to be invoked on a schedule */
 		Closure<T> closure;
@@ -213,6 +213,7 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 				scheduleHandle.cancel(true); // FIXME:  Configurable
 			}
 			scheduleHandle=null;
+			scheduleHandles.remove(closureName);
 		}
 		
 		/**
@@ -418,6 +419,14 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 			started.set(false);
 		}		
 	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see java.lang.Object#toString()
+	 */
+	public String toString() {
+		return objectName.toString();
+	}
 	 	
 	/**
 	 * To be implemented by concrete classes that have a specific start operation
@@ -545,8 +554,14 @@ public class ServiceAspectImpl implements SelfNaming, BeanNameGenerator, Initial
 	 * @param name The name of the scheduled task to cancel
 	 */
 	public void cancelSchedule(String name) {
-		ScheduledClosure<?> sc = scheduleHandles.get(name);
-		if(sc!=null) sc.cancel();
+		if(name==null || name.trim().isEmpty()) throw new IllegalArgumentException("The passed name was null or empty");
+		ScheduledClosure<?> sc = scheduleHandles.get(name);		
+		if(sc!=null) {
+			log.info("Cancelling Schedule [{}]", name);
+			sc.cancel();
+		} else {
+			log.warn("Attempted to cancel non-existent Schedule [{}]", name);
+		}
 	}
 	
 	/**
